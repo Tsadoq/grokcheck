@@ -1,0 +1,301 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/tsadoq/grokcheck/blob/main/skills/grokcheck/schema/lesson.schema.json",
+  "title": "grokcheck lesson",
+  "description": "A lesson written by an agent for grokcheck. The schema covers the shape; `grokcheck validate` also checks what a schema cannot: unique section and question ids, option indexes and answer lines in range, blank markers matching blanks, and code files inside the project.",
+  "type": "object",
+  "required": ["schema_version", "title", "scope", "sections", "final"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": 1},
+    "title": {"$ref": "#/$defs/text"},
+    "seed": {
+      "description": "Fixes the shuffled order of order_steps steps; defaults to a hash of the title.",
+      "type": "integer"
+    },
+    "scope": {
+      "type": "object",
+      "required": ["summary", "files"],
+      "additionalProperties": false,
+      "properties": {
+        "summary": {"$ref": "#/$defs/text"},
+        "files": {
+          "description": "Project-relative paths of the files the lesson covers.",
+          "type": "array",
+          "items": {"$ref": "#/$defs/text"}
+        }
+      }
+    },
+    "sections": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/section"}
+    },
+    "final": {
+      "description": "The closed-book final quiz.",
+      "type": "array",
+      "minItems": 3,
+      "items": {"$ref": "#/$defs/question"}
+    }
+  },
+  "$defs": {
+    "text": {
+      "type": "string",
+      "pattern": "\\S"
+    },
+    "texts": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/text"}
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+    },
+    "section": {
+      "type": "object",
+      "required": ["id", "title", "body", "checkpoints"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "title": {"$ref": "#/$defs/text"},
+        "body": {
+          "description": "Markdown explanation shown before the checkpoints.",
+          "$ref": "#/$defs/text"
+        },
+        "code": {"$ref": "#/$defs/code"},
+        "checkpoints": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "items": {"$ref": "#/$defs/question"}
+        }
+      }
+    },
+    "code": {
+      "description": "Either inline `language` and `text`, or a `file` in the project with an inclusive 1-based `lines` span.",
+      "type": "object",
+      "if": {"required": ["file"]},
+      "then": {
+        "required": ["file", "lines"],
+        "additionalProperties": false,
+        "properties": {
+          "file": {"$ref": "#/$defs/text"},
+          "lines": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {"type": "integer", "minimum": 1}
+          },
+          "language": {"$ref": "#/$defs/text"}
+        }
+      },
+      "else": {
+        "required": ["language", "text"],
+        "additionalProperties": false,
+        "properties": {
+          "language": {"$ref": "#/$defs/text"},
+          "text": {"$ref": "#/$defs/text"}
+        }
+      }
+    },
+    "option": {
+      "type": "object",
+      "required": ["text", "why"],
+      "additionalProperties": false,
+      "properties": {
+        "text": {"$ref": "#/$defs/text"},
+        "why": {
+          "description": "The reasoning or misconception behind choosing this option.",
+          "$ref": "#/$defs/text"
+        }
+      }
+    },
+    "options": {
+      "type": "array",
+      "minItems": 2,
+      "items": {"$ref": "#/$defs/option"}
+    },
+    "optionIndex": {
+      "description": "A 0-based index into `options`.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "blank": {
+      "type": "object",
+      "required": ["id", "accepted"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "accepted": {"$ref": "#/$defs/texts", "minItems": 1},
+        "case_sensitive": {"type": "boolean", "default": true},
+        "quote_insensitive": {"type": "boolean", "default": false}
+      }
+    },
+    "question": {
+      "type": "object",
+      "required": ["id", "type", "prompt"],
+      "properties": {
+        "type": {
+          "enum": [
+            "single_choice",
+            "multiple_choice",
+            "open_answer",
+            "predict_output",
+            "pick_line",
+            "order_steps",
+            "fill_blank"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {"required": ["type"], "properties": {"type": {"const": "single_choice"}}},
+          "then": {
+            "required": ["options", "correct"],
+            "additionalProperties": false,
+            "properties": {
+              "id": {"$ref": "#/$defs/identifier"},
+              "type": true,
+              "prompt": {"$ref": "#/$defs/text"},
+              "explanation": {"$ref": "#/$defs/text"},
+              "code": {"$ref": "#/$defs/code"},
+              "options": {"$ref": "#/$defs/options"},
+              "correct": {"$ref": "#/$defs/optionIndex"}
+            }
+          }
+        },
+        {
+          "if": {"required": ["type"], "properties": {"type": {"const": "multiple_choice"}}},
+          "then": {
+            "required": ["options", "correct"],
+            "additionalProperties": false,
+            "properties": {
+              "id": {"$ref": "#/$defs/identifier"},
+              "type": true,
+              "prompt": {"$ref": "#/$defs/text"},
+              "explanation": {"$ref": "#/$defs/text"},
+              "code": {"$ref": "#/$defs/code"},
+              "options": {"$ref": "#/$defs/options"},
+              "correct": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {"$ref": "#/$defs/optionIndex"}
+              }
+            }
+          }
+        },
+        {
+          "if": {"required": ["type"], "properties": {"type": {"const": "open_answer"}}},
+          "then": {
+            "required": ["model_answer", "rubric"],
+            "additionalProperties": false,
+            "properties": {
+              "id": {"$ref": "#/$defs/identifier"},
+              "type": true,
+              "prompt": {"$ref": "#/$defs/text"},
+              "explanation": {"$ref": "#/$defs/text"},
+              "code": {"$ref": "#/$defs/code"},
+              "model_answer": {"$ref": "#/$defs/text"},
+              "rubric": {
+                "description": "Binary met-or-unmet items the reader rates their answer against.",
+                "$ref": "#/$defs/texts",
+                "minItems": 2,
+                "maxItems": 6
+              }
+            }
+          }
+        },
+        {
+          "if": {"required": ["type"], "properties": {"type": {"const": "predict_output"}}},
+          "then": {
+            "description": "Answered by choice (`options` with `correct`) or as free text (`accepted`), never both.",
+            "required": ["code"],
+            "additionalProperties": false,
+            "properties": {
+              "id": {"$ref": "#/$defs/identifier"},
+              "type": true,
+              "prompt": {"$ref": "#/$defs/text"},
+              "explanation": {"$ref": "#/$defs/text"},
+              "code": {"$ref": "#/$defs/code"},
+              "options": {"$ref": "#/$defs/options"},
+              "correct": {"$ref": "#/$defs/optionIndex"},
+              "accepted": {"$ref": "#/$defs/texts", "minItems": 1}
+            },
+            "oneOf": [
+              {"required": ["options", "correct"], "not": {"required": ["accepted"]}},
+              {
+                "required": ["accepted"],
+                "not": {"anyOf": [{"required": ["options"]}, {"required": ["correct"]}]}
+              }
+            ]
+          }
+        },
+        {
+          "if": {"required": ["type"], "properties": {"type": {"const": "pick_line"}}},
+          "then": {
+            "required": ["code", "answer_lines"],
+            "additionalProperties": false,
+            "properties": {
+              "id": {"$ref": "#/$defs/identifier"},
+              "type": true,
+              "prompt": {"$ref": "#/$defs/text"},
+              "explanation": {"$ref": "#/$defs/text"},
+              "code": {"$ref": "#/$defs/code"},
+              "answer_lines": {
+                "description": "Lines of `code` counted from 1 at the snippet's first line.",
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {"type": "integer", "minimum": 1}
+              }
+            }
+          }
+        },
+        {
+          "if": {"required": ["type"], "properties": {"type": {"const": "order_steps"}}},
+          "then": {
+            "required": ["steps"],
+            "additionalProperties": false,
+            "properties": {
+              "id": {"$ref": "#/$defs/identifier"},
+              "type": true,
+              "prompt": {"$ref": "#/$defs/text"},
+              "explanation": {"$ref": "#/$defs/text"},
+              "code": {"$ref": "#/$defs/code"},
+              "steps": {
+                "description": "The steps in their correct order; the reader sees them shuffled.",
+                "$ref": "#/$defs/texts",
+                "minItems": 2,
+                "uniqueItems": true
+              }
+            }
+          }
+        },
+        {
+          "if": {"required": ["type"], "properties": {"type": {"const": "fill_blank"}}},
+          "then": {
+            "required": ["text", "blanks"],
+            "additionalProperties": false,
+            "properties": {
+              "id": {"$ref": "#/$defs/identifier"},
+              "type": true,
+              "prompt": {"$ref": "#/$defs/text"},
+              "explanation": {"$ref": "#/$defs/text"},
+              "language": {"$ref": "#/$defs/text"},
+              "text": {
+                "description": "Holds one `[[blank:<id>]]` marker per entry in `blanks`.",
+                "$ref": "#/$defs/text"
+              },
+              "blanks": {
+                "type": "array",
+                "minItems": 1,
+                "items": {"$ref": "#/$defs/blank"}
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
