@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "title": "How retry backs off",
+  "scope": {
+    "summary": "The `retry` helper that re-runs a flaky call with exponential backoff.",
+    "files": ["src/retry.py"]
+  },
+  "sections": [
+    {
+      "id": "purpose",
+      "title": "What retry is for",
+      "body": "`retry` wraps a call that can fail for a moment, such as a network request, and runs it again instead of failing the whole operation.\n\nIt only retries `TransientError`. Any other exception means the call is wrong, not unlucky, so it propagates at once.",
+      "code": {
+        "language": "python",
+        "text": "def retry(call, attempts=3, base_delay=0.5, sleep=time.sleep):\n    for attempt in range(attempts):\n        try:\n            return call()\n        except TransientError:\n            if attempt == attempts - 1:\n                raise\n            sleep(base_delay * 2 ** attempt)"
+      },
+      "checkpoints": [
+        {
+          "id": "cp-which-errors",
+          "type": "single_choice",
+          "prompt": "`call` raises `KeyError` on its first run. What does `retry` do?",
+          "options": [
+            {"text": "Lets the `KeyError` propagate immediately.", "why": "Only `TransientError` is caught, so every other exception leaves the loop on the first attempt."},
+            {"text": "Retries up to `attempts` times, then raises.", "why": "Misconception: retry catches every exception. The `except` clause names one class."},
+            {"text": "Returns `None`.", "why": "Misconception: a caught error is swallowed. Nothing here returns without a successful `call()`."}
+          ],
+          "correct": 0,
+          "explanation": "The `except TransientError` clause is the filter: a bug in `call` should fail fast rather than be retried."
+        },
+        {
+          "id": "cp-sleep-param",
+          "type": "multiple_choice",
+          "prompt": "Why is `sleep` a parameter instead of calling `time.sleep` directly? Pick every reason that applies.",
+          "options": [
+            {"text": "A test can pass a fake and run without waiting.", "why": "Injecting the clock is what lets a test assert the delays in milliseconds."},
+            {"text": "A caller in an async context can pass its own sleep function.", "why": "Any callable with the same shape fits, so the helper is not tied to one way of waiting."},
+            {"text": "It makes `retry` faster in production.", "why": "Misconception: injection changes speed. The default is still `time.sleep`."}
+          ],
+          "correct": [0, 1]
+        }
+      ]
+    },
+    {
+      "id": "control-flow",
+      "title": "The loop and the backoff",
+      "body": "Each pass of the loop is one attempt. A successful `call()` returns straight out of the loop.\n\nA `TransientError` waits `base_delay * 2 ** attempt` seconds and tries again, so the waits double: 0.5, 1, 2, and so on. The last attempt does not wait; it re-raises the error for the caller.",
+      "checkpoints": [
+        {
+          "id": "cp-raise-line",
+          "type": "pick_line",
+          "prompt": "Which line hands the final failure back to the caller?",
+          "code": {
+            "language": "python",
+            "text": "def retry(call, attempts=3, base_delay=0.5, sleep=time.sleep):\n    for attempt in range(attempts):\n        try:\n            return call()\n        except TransientError:\n            if attempt == attempts - 1:\n                raise\n            sleep(base_delay * 2 ** attempt)"
+          },
+          "answer_lines": [7],
+          "explanation": "The bare `raise` on line 7 re-raises the caught `TransientError` once no attempts are left."
+        },
+        {
+          "id": "cp-delays",
+          "type": "predict_output",
+          "prompt": "`call` always raises `TransientError`. What does this print?",
+          "code": {
+            "language": "python",
+            "text": "waits = []\ntry:\n    retry(call, attempts=4, base_delay=1, sleep=waits.append)\nexcept TransientError:\n    print(waits)"
+          },
+          "accepted": ["[1, 2, 4]"],
+          "explanation": "Four attempts leave three gaps between them, doubling from 1. The last attempt re-raises without sleeping."
+        }
+      ]
+    }
+  ],
+  "final": [
+    {
+      "id": "final-order",
+      "type": "order_steps",
+      "prompt": "Put the events of a call that fails once, then succeeds, in order.",
+      "steps": [
+        "`call()` raises `TransientError`",
+        "`retry` sleeps for `base_delay`",
+        "`call()` returns a value",
+        "`retry` returns that value"
+      ]
+    },
+    {
+      "id": "final-blank",
+      "type": "fill_blank",
+      "prompt": "Complete the delay so the waits double on every attempt.",
+      "language": "python",
+      "text": "sleep(base_delay * [[blank:growth]])",
+      "blanks": [
+        {"id": "growth", "accepted": ["2 ** attempt", "pow(2, attempt)"]}
+      ],
+      "explanation": "`2 ** attempt` is 1, 2, 4, ... for attempts 0, 1, 2, ..."
+    },
+    {
+      "id": "final-bug",
+      "type": "single_choice",
+      "prompt": "A teammate deletes the `if attempt == attempts - 1: raise` lines. What goes wrong when every attempt fails?",
+      "options": [
+        {"text": "`retry` sleeps once more and then returns `None`.", "why": "Without the re-raise the last `except` falls through to `sleep`, the loop ends, and the function returns `None` as if it succeeded."},
+        {"text": "The loop never ends.", "why": "Misconception: the `for` loop runs forever. `range(attempts)` still bounds it."},
+        {"text": "Nothing changes: Python re-raises the error at the end of the loop.", "why": "Misconception: a caught exception is re-raised automatically. Once caught, it is gone unless re-raised."}
+      ],
+      "correct": 0,
+      "explanation": "The failure turns silent: the caller gets `None` and a wasted final sleep."
+    },
+    {
+      "id": "final-why",
+      "type": "open_answer",
+      "prompt": "Why does `retry` re-raise after the last attempt instead of returning a default value?",
+      "model_answer": "The caller must learn that the operation failed. A default would look like success, hide the outage, and push a wrong value further into the program.",
+      "rubric": [
+        "Says the caller needs to know the call failed",
+        "Says a default value would be mistaken for a real result",
+        "Names a concrete harm, such as hiding an outage or corrupting later work"
+      ],
+      "explanation": "Met: \"Returning None would look like the fetch worked and the empty value would crash later.\" Unmet: \"Because raising is more Pythonic.\""
+    }
+  ]
+}
