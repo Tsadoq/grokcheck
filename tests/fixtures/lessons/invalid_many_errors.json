@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "title": "A lesson with four defects",
+  "scope": {
+    "summary": "The least-recently-used cache in src/cache.py.",
+    "files": ["src/cache.py"]
+  },
+  "sections": [
+    {
+      "id": "purpose",
+      "title": "What the cache is for",
+      "body": "The cache forgets the item used longest ago.",
+      "code": {"file": "../lessons/valid_full.json", "lines": [1, 3]},
+      "checkpoints": [
+        {
+          "id": "cp-capacity",
+          "type": "single_choice",
+          "prompt": "What happens when `LruCache(0)` is constructed?",
+          "options": [
+            {"text": "It raises ValueError.", "why": "The constructor rejects capacities below 1."},
+            {"text": "It stores nothing.", "why": "A zero-capacity cache is refused, not accepted."}
+          ],
+          "correct": 0
+        }
+      ]
+    },
+    {
+      "id": "eviction",
+      "title": "How eviction works",
+      "body": "Each put may drop the oldest item.",
+      "checkpoints": [
+        {
+          "id": "cp-capacity",
+          "type": "order_steps",
+          "prompt": "Put the steps of `put` in order.",
+          "steps": ["Store the value", "Move the key to the end", "Evict if over capacity"]
+        }
+      ]
+    }
+  ],
+  "final": [
+    {
+      "id": "final-why",
+      "type": "open_answer",
+      "prompt": "Why does `get` move the key to the end?",
+      "model_answer": "Reading counts as use.",
+      "rubric": ["Says a read counts as a use", "Links the front of the dict to eviction"]
+    },
+    {
+      "id": "final-blank",
+      "type": "fill_blank",
+      "prompt": "Complete the eviction call.",
+      "text": "self._items.popitem([[blank:arg]], [[blank:extra]])",
+      "blanks": [{"id": "arg", "accepted": ["last=False"]}]
+    },
+    {
+      "id": "final-methods",
+      "type": "multiple_choice",
+      "prompt": "Which methods mark a key as recently used?",
+      "options": [
+        {"text": "get", "why": "A hit moves the key to the end."},
+        {"text": "put", "why": "Every write moves the key to the end."},
+        {"text": "__len__", "why": "Counting items does not touch their order."}
+      ],
+      "correct": [0, 3]
+    }
+  ]
+}
