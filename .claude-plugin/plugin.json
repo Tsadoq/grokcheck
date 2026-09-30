@@ -1,0 +1,17 @@
+{
+  "name": "grokcheck",
+  "version": "0.1.0",
+  "description": "Turns a piece of code into an interactive lesson in the browser, then checks understanding with a live quiz.",
+  "author": {
+    "name": "tsadoq"
+  },
+  "homepage": "https://github.com/tsadoq/grokcheck",
+  "repository": "https://github.com/tsadoq/grokcheck",
+  "license": "MIT",
+  "keywords": [
+    "learning",
+    "code-comprehension",
+    "quiz",
+    "skill"
+  ]
+}

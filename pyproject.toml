@@ -1,0 +1,47 @@
+[project]
+name = "grokcheck"
+version = "0.1.0"
+description = "Interactive code lessons with a live quiz, served as a Claude Code plugin"
+authors = [
+    { name = "Matteo Villosio", email = "28503469+Tsadoq@users.noreply.github.com" },
+]
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "jsonschema>=4.23,<5",
+    "mypy>=2.3.1,<3",
+    "pytest>=9.1.1,<10",
+    "pytest-playwright>=0.7,<1",
+    "ruff>=0.16.4,<0.17",
+    "types-jsonschema>=4.23",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["skills/grokcheck"]
+testpaths = ["tests/python"]
+markers = ["e2e: drives the served lesson page in a real browser"]
+addopts = "-m 'not e2e'"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "COM812",
+    "ISC001",
+    "D203",
+    "D213",
+    "CPY001",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["INP001"]
+"tests/fixtures/**" = ["D", "EM101", "TRY003"]
+
+[tool.mypy]
+strict = true

@@ -1,0 +1,12 @@
+{
+  "name": "grokcheck-marketplace",
+  "owner": { "name": "tsadoq" },
+  "description": "The grokcheck plugin for Claude Code.",
+  "plugins": [
+    {
+      "name": "grokcheck",
+      "source": "./",
+      "description": "Interactive code lessons with a live quiz."
+    }
+  ]
+}

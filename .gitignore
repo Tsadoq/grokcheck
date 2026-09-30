@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+.grokcheck/
+node_modules/
+test-results/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+docs/plans/
