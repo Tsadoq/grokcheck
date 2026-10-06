@@ -17,11 +17,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: uv sync --locked
-      - run: uv run ruff check .
-      - run: uv run ruff format --check .
-      - run: uv run mypy skills/grokcheck/grokcheck tests
+      - run: uv run ruff check skills tests
+      - run: uv run ruff format --check skills tests
+      - run: uv run mypy skills/grokcheck/grokcheck skills/grokcheck-media/grokcheck_media tests
       - run: uv run pytest
-      - run: python skills/grokcheck/grokcheck validate skills/grokcheck/references/example-lesson.json --project .
+      - run: python skills/grokcheck/grokcheck validate skills/grokcheck/references/example-lesson.json --project . --strict
 
   javascript:
     runs-on: ubuntu-latest
@@ -30,7 +30,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - run: node --test tests/js/
+      - run: node --test tests/js/*.test.mjs
 
   e2e:
     runs-on: ubuntu-latest

@@ -1,3 +1,4 @@
+import { runTests } from "./api.js";
 import { renderCode } from "./codeview.js";
 import { renderMarkdown } from "./markdown.js";
 
@@ -8,6 +9,8 @@ const OUTCOME_LABELS = {
   needs_review: "Needs review: your agent will check this answer",
   self_rated: "Self-rated",
 };
+
+export const REVEAL_EVENT = "grokcheck:reveal";
 
 export function moveStep(order, index, delta) {
   const target = index + delta;
@@ -64,6 +67,11 @@ const RENDERERS = {
   pick_line: renderPickLine,
   order_steps: renderOrderSteps,
   fill_blank: renderFillBlank,
+  mutation_quiz: renderMutationQuiz,
+  fix_the_bug: renderFixTheBug,
+  predict_state: (question, { onChange }) => choiceGroup(question, "radio", onChange),
+  change_impact: renderChangeImpact,
+  parsons: renderParsons,
 };
 
 function choiceGroup(question, kind, onChange) {
@@ -246,6 +254,101 @@ function stepButton(label, description, disabled, onClick) {
   return button;
 }
 
+function renderChangeImpact(question, { onChange }) {
+  const choices = choiceGroup({ ...question, options: question.candidates }, "checkbox", onChange);
+  return {
+    ...choices,
+    element: element("div", { class: "change-impact" }, [
+      element("p", { text: "The change:" }),
+      element("div", { class: "change", html: renderMarkdown(question.change) }),
+      choices.element,
+    ]),
+  };
+}
+
+function renderParsons(question, { onChange }) {
+  let lines = question.lines.map((text) => ({ text, indent: 0, used: true }));
+  const deepest = lines.length - 1;
+  const list = element("ol", { class: "parsons" });
+  const announcer = element("p", { class: "visually-hidden", "aria-live": "polite" });
+
+  const commit = (next, at, message, focusTarget) => {
+    lines = next;
+    draw();
+    announcer.textContent = message;
+    focusTarget(list.children[at]).focus();
+    onChange();
+  };
+  const move = (index, delta, focusTarget) => {
+    const next = moveStep(lines, index, delta);
+    if (next === lines) {
+      return false;
+    }
+    commit(next, index + delta, `"${lines[index].text}" is now line ${index + delta + 1} of ${lines.length}.`, focusTarget);
+    return true;
+  };
+  const indent = (index, delta, focusTarget) => {
+    const line = lines[index];
+    const level = line.indent + delta;
+    if (level < 0 || level > deepest) {
+      return false;
+    }
+    commit(lines.with(index, { ...line, indent: level }), index, `"${line.text}" is now at indent ${level}.`, focusTarget);
+    return true;
+  };
+  const toggle = (index, focusTarget) => {
+    const line = lines[index];
+    const message = line.used ? `"${line.text}" is left out.` : `"${line.text}" is back in.`;
+    commit(lines.with(index, { ...line, used: !line.used }), index, message, focusTarget);
+  };
+
+  const draw = () => {
+    list.replaceChildren(
+      ...lines.map((line, index) => {
+        const focusButton = (position) => (item) => (item.children[position].disabled ? item : item.children[position]);
+        const item = element("li", { class: line.used ? "parsons-line" : "parsons-line left-out", style: `--indent: ${line.indent}`, tabindex: 0 }, [
+          element("code", { text: line.text }),
+          stepButton("Up", `Move "${line.text}" up`, index === 0, () => move(index, -1, focusButton(1))),
+          stepButton("Down", `Move "${line.text}" down`, index === lines.length - 1, () => move(index, 1, focusButton(2))),
+          stepButton("Outdent", `Outdent "${line.text}"`, line.indent === 0, () => indent(index, -1, focusButton(3))),
+          stepButton("Indent", `Indent "${line.text}"`, line.indent === deepest, () => indent(index, 1, focusButton(4))),
+          stepButton(line.used ? "Leave out" : "Put back", `${line.used ? "Leave out" : "Put back"} "${line.text}"`, false, () => toggle(index, focusButton(5))),
+        ]);
+        item.addEventListener("keydown", (event) => {
+          if (event.target !== item || item.closest("fieldset[disabled]")) {
+            return;
+          }
+          const focusLine = (target) => target;
+          const handled =
+            (event.key === "ArrowUp" && move(index, -1, focusLine)) ||
+            (event.key === "ArrowDown" && move(index, 1, focusLine)) ||
+            (event.key === "Tab" && indent(index, event.shiftKey ? -1 : 1, focusLine));
+          if (handled || event.key === "ArrowUp" || event.key === "ArrowDown") {
+            event.preventDefault();
+          }
+        });
+        return item;
+      }),
+    );
+  };
+  draw();
+
+  return {
+    element: element("div", { class: "parsons-problem" }, [
+      element("p", {
+        class: "hint",
+        text: "Order the lines with Up and Down, nest them with Indent and Outdent, and leave out the lines that do not belong. On a focused line, the arrow keys move it and Tab or Shift+Tab change its indent.",
+      }),
+      list,
+      announcer,
+    ]),
+    getResponse() {
+      const placed = lines.filter((line) => line.used).map(({ text, indent: level }) => ({ text, indent: level }));
+      return placed.length === 0 ? null : placed;
+    },
+  };
+}
+
 function renderFillBlank(question, { onChange }) {
   const container = element("div", {
     class: "fill-blank",
@@ -264,6 +367,81 @@ function renderFillBlank(question, { onChange }) {
   };
 }
 
+function mutationDescription({ file, line, replacement }) {
+  if (replacement === undefined || replacement === null) {
+    return [element("p", {}, ["Line ", String(line), " of ", element("code", { text: file }), " is deleted."])];
+  }
+  return [
+    element("p", {}, ["Line ", String(line), " of ", element("code", { text: file }), " is changed to:"]),
+    element("pre", { class: "run-log" }, [element("code", { text: replacement })]),
+  ];
+}
+
+function renderMutationQuiz(question, { onChange }) {
+  const inputs = question.tests.map((test) => element("input", { type: "checkbox", value: test.name }));
+  const group = element(
+    "fieldset",
+    { class: "choices" },
+    [element("legend", { text: "Tick every test that fails on the mutated copy" })].concat(
+      question.tests.map((test, index) => element("label", { class: "choice" }, [inputs[index], element("code", { text: test.name })])),
+    ),
+  );
+  group.addEventListener("change", onChange);
+  return {
+    element: element("div", { class: "mutation-quiz" }, [
+      ...mutationDescription(question.mutation),
+      group,
+      element("p", { class: "hint", text: "Then run the tests on the mutated copy to see which ones fail." }),
+    ]),
+    getResponse() {
+      const ticked = inputs.filter((input) => input.checked).map((input) => input.value);
+      return ticked.length === 0 ? null : ticked;
+    },
+  };
+}
+
+function renderFixTheBug(question, { onChange, beforeReveal }) {
+  const button = element("button", { type: "button", text: "Run tests" });
+  const result = element("div", { class: "run-result", "aria-live": "polite" });
+  let passed = null;
+  button.addEventListener("click", async () => {
+    if (!beforeReveal()) {
+      return;
+    }
+    const confidence = button.closest(".question")?.querySelector(`input[name="confidence-${question.id}"]:checked`)?.value ?? null;
+    button.disabled = true;
+    result.replaceChildren(element("p", { text: "Running the tests..." }));
+    try {
+      const { run } = await runTests(question.id, confidence);
+      passed = run.passed;
+      result.replaceChildren(runReport(run.passed, run.log));
+      onChange();
+    } catch (error) {
+      result.replaceChildren(element("p", { class: "error", text: `Could not run the tests: ${error.message}` }));
+    } finally {
+      button.disabled = false;
+    }
+  });
+  return {
+    element: element("div", { class: "fix-the-bug" }, [
+      element("p", { text: `Line ${question.mutation.line} of ${question.mutation.file} is broken. Fix it in this copy of the project:` }),
+      element("pre", { class: "run-log" }, [element("code", { text: question.worktree })]),
+      element("p", { text: "The tests that judge it:" }),
+      element("pre", { class: "run-log" }, [element("code", { text: question.test_command.join(" ") })]),
+      button,
+      result,
+    ]),
+    getResponse: () => (passed === null ? null : { passed }),
+  };
+}
+
+function runReport(passed, log) {
+  return element("div", {}, [
+    element("p", {}, [element("span", { class: `badge ${passed ? "pass" : "fail"}`, text: passed ? "Passed" : "Failed" })]),
+    log ? element("pre", { class: "run-log" }, [element("code", { text: log })]) : "",
+  ]);
+}
+
 export function renderReveal(question, grade) {
   const { reveal, outcome, score, response } = grade;
   const parts = [
@@ -273,7 +451,10 @@ export function renderReveal(question, grade) {
     ]),
   ];
   if (reveal.why.length > 0) {
-    parts.push(revealedOptions(question.options ?? [], reveal, response));
+    parts.push(revealedOptions(question.options ?? question.candidates ?? [], reveal, response));
+  }
+  if (reveal.lines.length > 0) {
+    parts.push(revealedParsons(reveal.lines, reveal.distractors));
   }
   if (reveal.answer_lines.length > 0) {
     parts.push(revealedLines(question.code, reveal.answer_lines));
@@ -313,8 +494,32 @@ export function renderReveal(question, grade) {
       ),
     );
   }
+  if (reveal.mutation?.replacement !== undefined && reveal.mutation?.replacement !== null) {
+    parts.push(element("p", { text: "The original line:" }), element("pre", { class: "run-log" }, [element("code", { text: reveal.mutation.replacement })]));
+  }
+  if (reveal.tests.length > 0) {
+    parts.push(
+      element(
+        "ul",
+        { class: "test-results" },
+        reveal.tests.map((test) =>
+          element("li", {}, [
+            element("span", { class: `badge ${test.fails ? "fail" : "pass"}`, text: test.fails ? "Fails" : "Passes" }),
+            " ",
+            element("code", { text: test.name }),
+          ]),
+        ),
+      ),
+    );
+  }
+  if (reveal.log) {
+    parts.push(element("pre", { class: "run-log" }, [element("code", { text: reveal.log })]));
+  }
   if (reveal.explanation) {
     parts.push(element("div", { class: "explanation", html: renderMarkdown(reveal.explanation) }));
+  }
+  if (reveal.element_payload) {
+    document.dispatchEvent(new CustomEvent(REVEAL_EVENT, { detail: { gate: question.id, ...reveal.element_payload } }));
   }
   return element("div", { class: "reveal" }, parts);
 }
@@ -333,6 +538,25 @@ function revealedOptions(options, reveal, response) {
       ]);
     }),
   );
+}
+
+function revealedParsons(lines, distractors) {
+  return element("div", {}, [
+    element("p", { text: "The solution:" }),
+    element(
+      "ol",
+      { class: "parsons" },
+      lines.map((line) => element("li", { class: "parsons-line", style: `--indent: ${line.indent}` }, [element("code", { text: line.text })])),
+    ),
+    element("p", { text: "Lines that do not belong:" }),
+    element(
+      "ul",
+      { class: "revealed-options" },
+      distractors.map((distractor) =>
+        element("li", {}, [element("s", {}, [element("code", { text: distractor.text })]), element("div", { class: "why", html: renderMarkdown(distractor.why) })]),
+      ),
+    ),
+  ]);
 }
 
 function revealedLines(code, answerLines) {

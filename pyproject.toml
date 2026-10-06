@@ -24,7 +24,7 @@ dev = [
 package = false
 
 [tool.pytest.ini_options]
-pythonpath = ["skills/grokcheck"]
+pythonpath = ["skills/grokcheck", "skills/grokcheck-media"]
 testpaths = ["tests/python"]
 markers = ["e2e: drives the served lesson page in a real browser"]
 addopts = "-m 'not e2e'"
@@ -45,3 +45,4 @@ ignore = [
 
 [tool.mypy]
 strict = true
+mypy_path = ["skills/grokcheck", "skills/grokcheck-media"]

@@ -11,24 +11,47 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+import secrets
+import shutil
 import subprocess
 import sys
 import threading
 import time
 import webbrowser
+from dataclasses import asdict, replace
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NoReturn, get_args
 
+from grokcheck import diagrams
 from grokcheck.client import ApiError, LessonClient, ServerGoneError
+from grokcheck.diffs import as_json, hunks
+from grokcheck.export import render_anki, render_obsidian
 from grokcheck.grading import Outcome
-from grokcheck.lesson import LessonError, load_lesson
+from grokcheck.ground import VERDICTS, apply_verdicts, manifest
+from grokcheck.lesson import DiagramElement, LessonError, load_lesson
+from grokcheck.lint import intro, item_flaws, prose
+from grokcheck.mutate import MutationError, plant, remove
+from grokcheck.refresh import report as refresh_report
 from grokcheck.run import DEFAULT_RETAKE, LessonRun, RunError
+from grokcheck.schedule import Schedule, local_today
+from grokcheck.scope import infer
 from grokcheck.server import serve_forever
+from grokcheck.sources import (
+    NeedsTranscription,
+    ingest,
+    manifest_entries,
+    system_pdftotext,
+)
+from grokcheck.spikes import SpikeError, check_name, rerun, run, write
+from grokcheck.trace import DEFAULT_MAX_EVENTS, record
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     from grokcheck.lesson import Lesson
+    from grokcheck.schedule import Entry
 
 DEFAULT_WAIT_SECONDS = 1200.0
 SESSION_WAIT_SECONDS = 10.0
@@ -72,14 +95,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-def _parser() -> _Parser:
+def _parser() -> _Parser:  # noqa: PLR0915
     parser = _Parser(prog="grokcheck", description=__doc__)
     commands = parser.add_subparsers(required=True, metavar="command")
 
     validate = commands.add_parser("validate", help="check a lesson file")
     validate.add_argument("lesson", type=Path)
+    validate.add_argument("--strict", action="store_true")
     _add_project(validate)
     validate.set_defaults(command=_validate)
+
+    ground = commands.add_parser("ground", help="list claims or record verdicts")
+    ground.add_argument("lesson", type=Path)
+    ground.add_argument("--verdicts", type=Path)
+    _add_project(ground)
+    ground.set_defaults(command=_ground)
 
     serve = commands.add_parser("serve", help="start a lesson in the browser")
     serve.add_argument("lesson", type=Path)
@@ -116,11 +146,232 @@ def _parser() -> _Parser:
     _add_server_options(retake)
     retake.set_defaults(command=_retake)
 
+    due = commands.add_parser("due", help="list or serve the re-tests now due")
+    due.add_argument("--serve", action="store_true")
+    _add_project(due)
+    _add_server_options(due)
+    due.set_defaults(command=_due)
+
+    scope = commands.add_parser("scope", help="guess a lesson's subject and files")
+    scope.add_argument("words", nargs="*")
+    _add_project(scope)
+    scope.set_defaults(command=_scope)
+
+    ingest_parser = commands.add_parser("ingest", help="copy documents into sources")
+    ingest_parser.add_argument("origins", nargs="+")
+    _add_project(ingest_parser)
+    ingest_parser.set_defaults(command=_ingest)
+
+    sources = commands.add_parser("sources", help="list the ingested sources")
+    _add_project(sources)
+    sources.set_defaults(command=_sources)
+
+    _add_trace(commands)
+
+    _add_spike(commands)
+
+    _add_mutate(commands)
+
+    _add_export(commands)
+
+    refresh = commands.add_parser("refresh", help="list claims that no longer hold")
+    refresh.add_argument("lesson", type=Path)
+    _add_project(refresh)
+    refresh.set_defaults(command=_reporting_spike_errors(_refresh))
+
+    _add_diagram(commands)
+
+    diff = commands.add_parser("diff", help="print a file's hunks as diff elements")
+    diff.add_argument("path")
+    diff.add_argument("--old", required=True)
+    diff.add_argument("--new", required=True)
+    _add_project(diff)
+    diff.set_defaults(command=_diff_hunks)
+
     hosted = commands.add_parser("_server")
     hosted.add_argument("lesson_dir", type=Path)
     _add_server_options(hosted)
     hosted.set_defaults(command=_host)
     return parser
+
+
+def _add_trace(commands: argparse._SubParsersAction[_Parser]) -> None:
+    trace = commands.add_parser("trace", help="record traces of real runs")
+    trace_commands = trace.add_subparsers(required=True, metavar="command")
+    trace_record = trace_commands.add_parser("record", help="record a script's run")
+    trace_record.add_argument("script", type=Path)
+    trace_record.add_argument("--cite", nargs="+", type=Path, required=True)
+    trace_record.add_argument("--entry")
+    trace_record.add_argument("--out", type=Path)
+    trace_record.add_argument("--max-events", type=int, default=DEFAULT_MAX_EVENTS)
+    _add_project(trace_record)
+    trace_record.set_defaults(command=_trace_record)
+
+
+def _add_spike(commands: argparse._SubParsersAction[_Parser]) -> None:
+    spike = commands.add_parser("spike", help="run one-question experiments")
+    spike_commands = spike.add_subparsers(required=True, metavar="command")
+
+    check = spike_commands.add_parser("check", help="ask PyPI whether a name exists")
+    check.add_argument("name")
+    check.set_defaults(command=_reporting_spike_errors(_spike_check))
+
+    new = spike_commands.add_parser("new", help="write a spike script")
+    new.add_argument("spike_id")
+    new.add_argument("--hypothesis", required=True)
+    new.add_argument("--dep", action="append", default=[], metavar="NAME==VERSION")
+    new.add_argument("--exclude-newer", required=True)
+    code = new.add_mutually_exclusive_group(required=True)
+    code.add_argument("--code")
+    code.add_argument("--file", type=Path)
+    _add_project(new)
+    new.set_defaults(command=_reporting_spike_errors(_spike_new))
+
+    run_spike = spike_commands.add_parser("run", help="run a spike and record it")
+    run_spike.add_argument("spike_id")
+    run_spike.add_argument("--container", action="store_true")
+    run_spike.add_argument("--allow", action="append", default=[], metavar="NAME")
+    _add_project(run_spike)
+    run_spike.set_defaults(command=_reporting_spike_errors(_spike_run))
+
+    rerun_spikes = spike_commands.add_parser("rerun", help="list spikes that changed")
+    _add_project(rerun_spikes)
+    rerun_spikes.set_defaults(command=_reporting_spike_errors(_spike_rerun))
+
+
+def _add_diagram(commands: argparse._SubParsersAction[_Parser]) -> None:
+    diagram = commands.add_parser("diagram", help="check a lesson's diagrams")
+    diagram_commands = diagram.add_subparsers(required=True, metavar="command")
+    check = diagram_commands.add_parser("check", help="warn on and render diagrams")
+    check.add_argument("lesson", type=Path)
+    _add_project(check)
+    check.set_defaults(command=_diagram_check)
+
+
+def _diagram_check(args: argparse.Namespace) -> dict[str, Any]:
+    """Warn on each diagram, then render it with `mmdc` when that is installed."""
+    lesson = _load(args.lesson, args.project)
+    found = [
+        (f"sections[{i}].elements[{j - section.code_sugar}].mermaid", element.mermaid)
+        for i, section in enumerate(lesson.sections)
+        for j, element in enumerate(section.elements)
+        if isinstance(element, DiagramElement)
+    ]
+    warnings = [
+        {"path": path, "message": message}
+        for path, text in found
+        for message in diagrams.warnings(text, args.project)
+    ]
+    if shutil.which("mmdc") is None:
+        return {"ok": True, "warnings": warnings, "skipped": "mmdc not installed"}
+    failures = [
+        {"path": path, "message": error}
+        for path, text in found
+        if (error := diagrams.render_error(text))
+    ]
+    if failures:
+        msg = "a diagram does not render"
+        raise CliError(msg, problems=failures, warnings=warnings)
+    return {"ok": True, "warnings": warnings}
+
+
+def _add_export(commands: argparse._SubParsersAction[_Parser]) -> None:
+    export = commands.add_parser("export", help="write a run's misses as Anki cards")
+    export.add_argument("lesson_id")
+    export.add_argument("--format", choices=("anki", "obsidian"), default="anki")
+    export.add_argument("--out", type=Path)
+    export.add_argument("--vault", type=Path)
+    export.add_argument("--template", type=Path)
+    _add_project(export)
+    export.set_defaults(command=_export)
+
+
+def _export(args: argparse.Namespace) -> dict[str, Any]:
+    """Write the Anki file, by default next to `results.json`, and count its cards."""
+    lesson_dir = _lesson_dir(args)
+    results_path = lesson_dir / "results.json"
+    if not results_path.exists():
+        msg = "the lesson has not been submitted yet"
+        raise CliError(msg)
+    results = json.loads(results_path.read_text(encoding="utf-8"))
+    head = subprocess.run(  # noqa: S603
+        ["git", "-C", str(args.project), "rev-parse", "--short", "HEAD"],  # noqa: S607
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    commit = head.stdout.strip() if head.returncode == 0 else "unknown"
+    lesson = LessonRun.open(lesson_dir).lesson
+    if args.format == "obsidian":
+        return _export_obsidian(args, lesson, results, commit)
+    text = render_anki(lesson, results, args.project.resolve().name, commit)
+    out: Path = args.out or lesson_dir / "anki.txt"
+    out.write_text(text, encoding="utf-8")
+    cards = sum(1 for line in text.splitlines() if not line.startswith("#"))
+    return {"ok": True, "path": str(out), "cards": cards}
+
+
+def _export_obsidian(
+    args: argparse.Namespace, lesson: Lesson, results: dict[str, Any], commit: str
+) -> dict[str, Any]:
+    if args.vault is None:
+        msg = "--format obsidian needs --vault <folder>"
+        raise CliError(msg)
+    template = args.template.read_text(encoding="utf-8") if args.template else None
+    repo = args.project.resolve().name
+    try:
+        text = render_obsidian(lesson, results, repo, commit, template)
+    except (KeyError, IndexError, ValueError) as error:
+        msg = f"the template does not format: {error!r}"
+        raise CliError(msg) from error
+    return {"ok": True, "path": str(write_note(args.vault, lesson.title, text))}
+
+
+def write_note(vault: Path, title: str, text: str) -> Path:
+    """Write `text` as a new note `grokcheck - <title> - <date>.md` in `vault`.
+
+    Raises `CliError` rather than overwrite a note that already exists.
+    """
+    name = re.sub(r'[\\/:*?"<>|#^\[\]]', "-", " ".join(title.split()))
+    path = vault / f"grokcheck - {name} - {local_today().isoformat()}.md"
+    try:
+        with path.open("x", encoding="utf-8") as note:
+            note.write(text)
+    except FileExistsError as error:
+        msg = f"{path} already exists"
+        raise CliError(msg) from error
+    return path
+
+
+def _add_mutate(commands: argparse._SubParsersAction[_Parser]) -> None:
+    mutate = commands.add_parser("mutate", help="plant a mutant that a test catches")
+    mutate.add_argument("file", nargs="?")
+    mutate.add_argument("line", type=int, nargs="?")
+    mutate.add_argument("--replace")
+    mutate.add_argument("--remove", type=Path, metavar="WORKTREE")
+    mutate.add_argument("--test", nargs=argparse.REMAINDER, default=[])
+    _add_project(mutate)
+    mutate.set_defaults(command=_mutate)
+
+
+def _mutate(args: argparse.Namespace) -> dict[str, Any]:
+    """Plant a mutant and print its run, or `--remove` a planted worktree.
+
+    `--test` takes the rest of the command line, so it comes last.
+    """
+    planting = args.file is not None and args.line is not None and args.test
+    if args.remove is None and not planting:
+        msg = "mutate needs <file> <line> --test <command...>, or --remove <worktree>"
+        raise CliError(msg)
+    try:
+        if args.remove is not None:
+            remove(args.remove)
+            return {"ok": True}
+        result = plant(args.project, args.file, args.line, args.replace, args.test)
+    except MutationError as error:
+        raise CliError(str(error)) from error
+    return {"ok": True, **asdict(result), "worktree": str(result.worktree)}
 
 
 def _add_project(parser: argparse.ArgumentParser) -> None:
@@ -133,8 +384,42 @@ def _add_server_options(parser: argparse.ArgumentParser) -> None:
 
 
 def _validate(args: argparse.Namespace) -> dict[str, Any]:
-    _load(args.lesson, args.project)
-    return {"ok": True}
+    """Load and lint the lesson; `--strict` fails on any warning."""
+    lesson = _load(args.lesson, args.project)
+    warnings = [asdict(w) for lint in (item_flaws, prose, intro) for w in lint(lesson)]
+    if args.strict and warnings:
+        msg = "the lesson has lint warnings"
+        raise CliError(msg, problems=warnings)
+    return {"ok": True, "warnings": warnings}
+
+
+def _ground(args: argparse.Namespace) -> dict[str, Any]:
+    """Print the claim manifest, or apply `--verdicts` and count them by result.
+
+    `notes` keeps every non-empty verdict note, since the lesson has no place
+    for one.
+    """
+    if args.verdicts is None:
+        lesson = _load(args.lesson, args.project)
+        return {"ok": True, "manifest": manifest(lesson, args.project)}
+    try:
+        verdicts: list[dict[str, Any]] = json.loads(args.verdicts.read_text("utf-8"))
+    except json.JSONDecodeError as error:
+        msg = f"the verdicts file is not valid JSON: {error}"
+        raise CliError(msg) from error
+    if not isinstance(verdicts, list) or not all(isinstance(v, dict) for v in verdicts):
+        msg = "the verdicts file must hold a list of objects"
+        raise CliError(msg)
+    apply_verdicts(args.lesson, verdicts)
+    counts = dict.fromkeys(("supported", "contradicted", "unchecked"), 0)
+    for verdict in verdicts:
+        counts[VERDICTS[verdict["verdict"]]] += 1
+    notes = [
+        {key: verdict[key] for key in ("claim_id", "verdict", "note")}
+        for verdict in verdicts
+        if verdict.get("note")
+    ]
+    return {"ok": True, **counts, "notes": notes}
 
 
 def _serve(args: argparse.Namespace) -> dict[str, Any]:
@@ -145,6 +430,108 @@ def _serve(args: argparse.Namespace) -> dict[str, Any]:
 def _retake(args: argparse.Namespace) -> dict[str, Any]:
     lesson = LessonRun.retake_from(_lesson_dir(args), args.include)
     return _launch(LessonRun.create(lesson, args.project), args)
+
+
+def _due(args: argparse.Namespace) -> dict[str, Any]:
+    """Print the due and the stale entries, or with `--serve` launch the due ones."""
+    due, stale = Schedule.load(args.project).partition(local_today())
+    if not args.serve:
+        return {"due": [asdict(e) for e in due], "stale": [asdict(e) for e in stale]}
+    return _launch(LessonRun.create(_due_lesson(args.project, due), args.project), args)
+
+
+def _due_lesson(project: Path, due: Sequence[Entry]) -> Lesson:
+    """Merge the due final questions of every source lesson into one retake.
+
+    Each question takes its schedule key as id, so its submit counts as a
+    review. Due gate questions need their trace and are only listed.
+    """
+    keys = {(entry.lesson_id, entry.question_id): entry.key for entry in due}
+    lessons_dir = project / ".grokcheck" / "lessons"
+    retakes = [
+        (lesson_id, LessonRun.retake_from(lessons_dir / lesson_id, _RETAKE_CHOICES))
+        for lesson_id in dict.fromkeys(entry.lesson_id for entry in due)
+    ]
+    final = tuple(
+        replace(question, id=keys[lesson_id, question.id])
+        for lesson_id, lesson in retakes
+        for question in lesson.final
+        if (lesson_id, question.id) in keys
+    )
+    if not final:
+        msg = "no final question is due"
+        raise CliError(msg)
+    first = retakes[0][1]
+    files = dict.fromkeys(f for _, lesson in retakes for f in lesson.scope.files)
+    return replace(
+        first,
+        title="Retake: questions due for review",
+        scope=replace(
+            first.scope, summary="Questions due for review.", files=tuple(files)
+        ),
+        final=final,
+    )
+
+
+def _scope(args: argparse.Namespace) -> dict[str, Any]:
+    return asdict(infer(args.words, args.project))
+
+
+def _ingest(args: argparse.Namespace) -> None:
+    """Print one line per origin, as each is ingested."""
+    pdftotext = system_pdftotext()
+    for origin in args.origins:
+        result = ingest(origin, args.project, pdftotext=pdftotext)
+        if isinstance(result, NeedsTranscription):
+            _print(
+                {
+                    "needs_transcription": True,
+                    "target": str(result.target_path),
+                    "origin": origin,
+                    "page_count_hint": result.page_count_hint,
+                }
+            )
+        else:
+            _print(result.as_json(args.project))
+
+
+def _sources(args: argparse.Namespace) -> dict[str, Any]:
+    return {"sources": manifest_entries(args.project)}
+
+
+def _trace_record(args: argparse.Namespace) -> dict[str, Any]:
+    """Record `script` and write the trace under `.grokcheck/traces/` or `--out`."""
+    try:
+        trace = record(args.script, set(args.cite), args.entry, args.max_events)
+    except Exception as error:
+        msg = f"the traced script raised {error!r}"
+        raise CliError(msg) from error
+    out: Path | None = args.out
+    if out is None:
+        stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+        trace_id = f"{stamp}-{secrets.token_hex(3)}"
+        out = args.project / ".grokcheck" / "traces" / f"{trace_id}.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(trace.to_json()), encoding="utf-8")
+    return {
+        "ok": True,
+        "trace_id": out.stem,
+        "steps": len(trace.steps),
+        "truncated": trace.truncated,
+    }
+
+
+def _refresh(args: argparse.Namespace) -> dict[str, Any]:
+    return {"ok": True, **asdict(refresh_report(args.lesson, args.project))}
+
+
+def _diff_hunks(args: argparse.Namespace) -> dict[str, Any]:
+    try:
+        elements = hunks(args.project, args.path, args.old, args.new)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+        msg = f"git diff failed: {str(error.stderr or error).strip()}"
+        raise CliError(msg) from error
+    return {"ok": True, "elements": [as_json(element) for element in elements]}
 
 
 def _wait(args: argparse.Namespace) -> dict[str, Any]:
@@ -222,6 +609,60 @@ def _lesson_dir(args: argparse.Namespace) -> Path:
         msg = f"no lesson '{lesson_id}' in {project}"
         raise CliError(msg)
     return lesson_dir
+
+
+def _reporting_spike_errors(
+    handler: Callable[[argparse.Namespace], dict[str, Any]],
+) -> Callable[[argparse.Namespace], dict[str, Any]]:
+    def command(args: argparse.Namespace) -> dict[str, Any]:
+        try:
+            return handler(args)
+        except SpikeError as error:
+            raise CliError(str(error)) from error
+
+    return command
+
+
+def _spike_check(args: argparse.Namespace) -> dict[str, Any]:
+    return {"ok": True, **asdict(check_name(args.name))}
+
+
+def _spike_new(args: argparse.Namespace) -> dict[str, Any]:
+    """Write the spike once every `--dep` is an exact pin of a name PyPI knows."""
+    deps: dict[str, str] = {}
+    for dep in args.dep:
+        name, separator, version = dep.partition("==")
+        if not (name and separator and version):
+            msg = f"dependency '{dep}' must be pinned as NAME==VERSION"
+            raise CliError(msg)
+        if not check_name(name).exists:
+            msg = f"'{name}' is not on PyPI"
+            raise CliError(msg)
+        deps[name] = version
+    code = args.code if args.file is None else args.file.read_text(encoding="utf-8")
+    script = write(_spike_dir(args), args.hypothesis, code, deps, args.exclude_newer)
+    return {"ok": True, "spike_id": args.spike_id, "script": str(script)}
+
+
+def _spike_run(args: argparse.Namespace) -> dict[str, Any]:
+    result = run(
+        _spike_dir(args), args.project, container=args.container, allow=args.allow
+    )
+    return {"ok": True, **asdict(result)}
+
+
+def _spike_rerun(args: argparse.Namespace) -> dict[str, Any]:
+    changes = rerun(args.project / ".grokcheck" / "spikes", args.project)
+    return {"ok": True, "changed": [asdict(change) for change in changes]}
+
+
+def _spike_dir(args: argparse.Namespace) -> Path:
+    spike_id: str = args.spike_id
+    if Path(spike_id).name != spike_id:
+        msg = f"spike id '{spike_id}' must be a directory name, not a path"
+        raise CliError(msg)
+    project: Path = args.project
+    return project / ".grokcheck" / "spikes" / spike_id
 
 
 def _launch(run: LessonRun, args: argparse.Namespace) -> dict[str, Any]:

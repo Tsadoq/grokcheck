@@ -1,0 +1,534 @@
+{
+  "schema_version": 2,
+  "title": "A tour of grokcheck",
+  "scope": {
+    "summary": "What grokcheck claims, how its agent, server and page work together, and where its evidence stops.",
+    "files": [
+      "README.md",
+      "skills/grokcheck/SKILL.md",
+      "research/README.md"
+    ]
+  },
+  "plan": {
+    "subject": "document",
+    "time_budget": 15,
+    "content": [
+      "structure",
+      "behaviour"
+    ],
+    "media": [
+      "vocab",
+      "diagram",
+      "single_choice",
+      "multiple_choice"
+    ],
+    "rejected": [
+      "trace",
+      "spike",
+      "video"
+    ],
+    "rationale": [
+      "The subject is three documents, so every claim quotes their ingested copies.",
+      "A vocabulary table names the six terms the rest of the tour uses.",
+      "One diagram shows how the agent, the server and the page pass events.",
+      "Traces and spikes need code to run, and a video would only repeat the diagram."
+    ],
+    "default_depth": "detail"
+  },
+  "sections": [
+    {
+      "id": "s1",
+      "title": "The claim: a lesson you cannot skim",
+      "body": "grokcheck claims that you can prove to yourself that you understand code, instead of only feeling that you do. The problem it starts from is simple. When an agent writes code for you, it is easy to accept a change you do not understand.\n\nIts answer is a lesson in your browser. Each section ends in checkpoint questions, and the next section stays locked until you answer them. A closed-book final quiz then shows where your confidence was wrong.\n\nThe research notes give the reason for this shape. Understanding has to be tested, because people are confident about code they do not understand.",
+      "elements": [
+        {
+          "type": "vocab",
+          "min_opened": 3,
+          "terms": [
+            {
+              "term": "lesson",
+              "owner": "ours",
+              "definition": "An interactive page in your browser, made from a change, an area of code, a library, options or a document.",
+              "detail": "A lesson is a list of sections followed by a closed-book final quiz."
+            },
+            {
+              "term": "section",
+              "owner": "ours",
+              "definition": "A short explanation, followed by its checkpoint questions.",
+              "detail": "A section can hold elements such as code, a diagram or a vocabulary table like this one."
+            },
+            {
+              "term": "checkpoint",
+              "owner": "ours",
+              "definition": "A question at the end of a section, answered before the next section unlocks.",
+              "detail": "Checkpoints reveal their answer at once. Final questions reveal theirs only after you submit."
+            },
+            {
+              "term": "gate",
+              "owner": "ours",
+              "definition": "The lock a question puts on what comes next, until you answer it.",
+              "detail": "Checkpoints gate the next section. A predict question can also gate a hidden result, such as the output of a spike."
+            },
+            {
+              "term": "claim backing",
+              "owner": "ours",
+              "definition": "The evidence a claim carries: cited lines, or a spike's output.",
+              "detail": "A grounding subagent judges each claim against its backing alone, before the lesson is served."
+            },
+            {
+              "term": "spike",
+              "owner": "ours",
+              "definition": "A small experiment run against your pinned library versions.",
+              "detail": "Its result stays hidden until you predict it."
+            }
+          ],
+          "claims": [
+            {
+              "text": "The next section stays locked until you answer the checkpoints of the current one.",
+              "backing": {
+                "file": ".grokcheck/sources/readme.md",
+                "lines": [
+                  18,
+                  18
+                ],
+                "quote": "Every section ends in checkpoint questions, and the next section stays locked until you answer them."
+              },
+              "verified": "supported"
+            },
+            {
+              "text": "A spike's result is hidden until the reader predicts it.",
+              "backing": {
+                "file": ".grokcheck/sources/readme.md",
+                "lines": [
+                  69,
+                  69
+                ],
+                "quote": "A small experiment against your pinned versions, its result hidden until you predict it"
+              },
+              "verified": "supported"
+            },
+            {
+              "text": "The evidence for a claim is the cited lines or a spike's output.",
+              "backing": {
+                "file": ".grokcheck/sources/skill.md",
+                "lines": [
+                  79,
+                  79
+                ],
+                "quote": "the `evidence` (the cited lines, or a spike's output)"
+              },
+              "verified": "supported"
+            },
+            {
+              "text": "The author writes a document lesson from the ingested copies, not from memory.",
+              "backing": {
+                "file": ".grokcheck/sources/skill.md",
+                "lines": [
+                  45,
+                  45
+                ],
+                "quote": "Author only from the copies, never from memory of the document."
+              },
+              "verified": "supported"
+            },
+            {
+              "text": "Understanding has to be tested, because people are confident about code they do not understand.",
+              "backing": {
+                "file": ".grokcheck/sources/readme-2.md",
+                "lines": [
+                  29,
+                  29
+                ],
+                "quote": "Understanding has to be tested, never self-reported."
+              },
+              "verified": "supported"
+            }
+          ]
+        }
+      ],
+      "checkpoints": [
+        {
+          "id": "s1-locked",
+          "type": "single_choice",
+          "prompt": "You read section 2 and skip its checkpoints. What does the page do with section 3?",
+          "options": [
+            {
+              "text": "Keeps section 3 locked until you answer them.",
+              "why": "Every section ends in checkpoint questions, and the next one stays locked until you answer them."
+            },
+            {
+              "text": "Shows section 3 with a warning that you skipped.",
+              "why": "Misconception: checkpoints are advice. They are a gate, and the page does not open the next section past them."
+            },
+            {
+              "text": "Shows section 3 and marks the skipped ones wrong.",
+              "why": "Misconception: skipping counts as a wrong answer. Nothing is graded until you answer, and the section stays locked."
+            }
+          ],
+          "correct": 0,
+          "explanation": "The checkpoints gate the next section. That is what makes a lesson hard to skim."
+        },
+        {
+          "id": "s1-backing",
+          "type": "multiple_choice",
+          "prompt": "An author writes a lesson about a paper. Which of these can back a claim the grounding pass will judge?",
+          "options": [
+            {
+              "text": "Quoted lines of the paper's ingested copy",
+              "why": "Cited lines are evidence the grounding subagent can read."
+            },
+            {
+              "text": "The author's memory of the paper",
+              "why": "Misconception: knowing the paper is enough. The skill says to author only from the copies, never from memory."
+            },
+            {
+              "text": "The recorded output of a spike",
+              "why": "A spike's output is the other kind of evidence the manifest carries."
+            },
+            {
+              "text": "The reader's confidence rating",
+              "why": "Misconception: confidence is evidence. It is what the lesson measures, not what backs a claim."
+            }
+          ],
+          "correct": [
+            0,
+            2
+          ],
+          "explanation": "The manifest gives each claim its evidence: the cited lines, or a spike's output."
+        }
+      ]
+    },
+    {
+      "id": "s2",
+      "title": "The method: agent, server and page",
+      "body": "The agent reaches the page only through the lesson server. The agent writes the lesson, a fresh-context subagent checks its claims, and the `grokcheck` command serves it.\n\n`serve` returns while the server keeps running. The agent then runs `wait` in the background. It exits with one event, such as a question you asked in the page, and its exit wakes the agent.\n\nThe agent answers a question with `reply`, and the answer appears under your question. When you submit the final quiz, the `submitted` event starts the debrief.",
+      "elements": [
+        {
+          "type": "diagram",
+          "kind": "flowchart",
+          "mermaid": "flowchart LR\n  reader([Reader]) -->|asks for a lesson| agent[Claude Code agent]\n  agent -->|writes| draft[draft.json]\n  agent -->|starts| grounder[Grounding subagent]\n  grounder -->|verdicts| agent\n  agent -->|serve| server[Lesson server]\n  server -->|opens| page[Lesson page]\n  page -->|answers and questions| server\n  server -->|wait exits with an event| agent\n  agent -->|reply| server\n  server -->|saves| store[(Lesson folder)]",
+          "caption": "Follow one question: the page sends it to the server, `wait` hands it to the agent, and `reply` sends the answer back the same way.",
+          "legend": "Rounded box: the person. Cylinder: files on disk. Other boxes: programs.",
+          "claims": [
+            {
+              "text": "The agent plans the lesson, a fresh-context subagent checks its claims, and the command-line tool serves it and hands events back.",
+              "backing": {
+                "file": ".grokcheck/sources/skill.md",
+                "lines": [
+                  11,
+                  11
+                ],
+                "quote": "a fresh-context subagent checks its claims, and the `grokcheck` CLI serves it, collects answers, and hands events back to you."
+              },
+              "verified": "supported"
+            },
+            {
+              "text": "`serve` returns while the server keeps running.",
+              "backing": {
+                "file": ".grokcheck/sources/skill.md",
+                "lines": [
+                  89,
+                  95
+                ],
+                "quote": "returns while the server keeps running"
+              },
+              "verified": "supported"
+            },
+            {
+              "text": "`wait` exits with one event, and its exit wakes the agent.",
+              "backing": {
+                "file": ".grokcheck/sources/skill.md",
+                "lines": [
+                  105,
+                  105
+                ],
+                "quote": "It exits with one JSON event, and its exit wakes you."
+              },
+              "verified": "supported"
+            },
+            {
+              "text": "A reply sent with `reply` appears under the reader's question in the page.",
+              "backing": {
+                "file": ".grokcheck/sources/skill.md",
+                "lines": [
+                  118,
+                  124
+                ],
+                "quote": "The reply appears under the reader's question in the page."
+              },
+              "verified": "supported"
+            },
+            {
+              "text": "The debrief starts from the `submitted` event.",
+              "backing": {
+                "file": ".grokcheck/sources/skill.md",
+                "lines": [
+                  126,
+                  128
+                ],
+                "quote": "The `submitted` event carries `results_path` and a `summary`."
+              },
+              "verified": "supported"
+            }
+          ]
+        }
+      ],
+      "checkpoints": [
+        {
+          "id": "s2-wait",
+          "type": "single_choice",
+          "prompt": "How does the agent learn that you asked a question in the page?",
+          "options": [
+            {
+              "text": "The page writes the question into the chat.",
+              "why": "Misconception: the page talks to the agent directly. It talks only to the lesson server."
+            },
+            {
+              "text": "A background `wait` exits with the question event.",
+              "why": "The server holds the event, and `wait` exits with it, which wakes the agent."
+            },
+            {
+              "text": "The agent reads the page file every minute.",
+              "why": "Misconception: the agent polls the page. It blocks on `wait` instead, which returns one event."
+            }
+          ],
+          "correct": 1,
+          "explanation": "Run in the background, `wait` lets you keep talking in the chat while the agent waits for the page."
+        },
+        {
+          "id": "s2-reply",
+          "type": "single_choice",
+          "prompt": "You highlight a line and ask about it. The agent has the event. What does it run so the answer shows in the page?",
+          "options": [
+            {
+              "text": "`serve` again, with the answer added to the draft",
+              "why": "Misconception: the page shows only what was served. A new serve starts a new lesson instead."
+            },
+            {
+              "text": "`retake`, with the id of your question",
+              "why": "Misconception: retake answers questions. It builds a new quiz from the questions you missed."
+            },
+            {
+              "text": "`reply`, with the lesson id and your question id",
+              "why": "The reply is sent to the server, and it appears under your question in the page."
+            }
+          ],
+          "correct": 2,
+          "explanation": "`reply` takes the lesson id, the question id and the answer as markdown."
+        }
+      ]
+    },
+    {
+      "id": "s3",
+      "title": "The limits, and what would change them",
+      "body": "grokcheck checks a claim only against the evidence the claim cites. The grounding subagent reads the manifest and no other file. A claim whose evidence shows nothing either way is marked `not_shown`, not wrong.\n\nThe research behind the tool has limits too. Only claims marked \"(verified)\" were checked against the primary source. The rest need checking before they drive a decision.\n\nThe research also says what would weaken the design. Video is passive and gives the feeling of understanding without testing it. So a tour that you only watch would fail the tool's own standard, and this one ends in a quiz.",
+      "elements": [
+        {
+          "type": "prose",
+          "markdown": "The strongest evidence in the notes is for retrieval with feedback. Execution traces are the one comprehension aid with a controlled positive result. Both are marked \"(verified)\" in the research notes.",
+          "claims": [
+            {
+              "text": "The grounding subagent judges each claim only from its evidence and reads no other file.",
+              "backing": {
+                "file": ".grokcheck/sources/skill.md",
+                "lines": [
+                  79,
+                  79
+                ],
+                "quote": "judge only from its `evidence`"
+              },
+              "verified": "supported"
+            },
+            {
+              "text": "A claim whose evidence shows neither truth nor falsehood gets the verdict `not_shown`.",
+              "backing": {
+                "file": ".grokcheck/sources/skill.md",
+                "lines": [
+                  79,
+                  79
+                ],
+                "quote": "`not_shown` when it shows neither or the evidence is `null`"
+              },
+              "verified": "supported"
+            },
+            {
+              "text": "A `contradicted` claim is rewritten to say what the evidence shows, and is never deleted to pass the check.",
+              "backing": {
+                "file": ".grokcheck/sources/skill.md",
+                "lines": [
+                  87,
+                  87
+                ],
+                "quote": "Rewrite every `contradicted` claim so it says what the evidence shows"
+              },
+              "verified": "supported"
+            },
+            {
+              "text": "Only claims marked \"(verified)\" in the research notes were checked against the primary source. The rest need checking before they drive a decision.",
+              "backing": {
+                "file": ".grokcheck/sources/readme-2.md",
+                "lines": [
+                  7,
+                  7
+                ],
+                "quote": "the rest need checking before they drive a decision."
+              },
+              "verified": "supported"
+            },
+            {
+              "text": "The research calls video passive: it gives the feeling of understanding without testing it.",
+              "backing": {
+                "file": ".grokcheck/sources/readme-2.md",
+                "lines": [
+                  83,
+                  83
+                ],
+                "quote": "it is passive and gives the feeling of understanding without testing it."
+              },
+              "verified": "supported"
+            },
+            {
+              "text": "Retrieval with feedback is the strongest lever the research found, and the finding is marked verified.",
+              "backing": {
+                "file": ".grokcheck/sources/readme-2.md",
+                "lines": [
+                  29,
+                  29
+                ],
+                "quote": "Retrieval with feedback is the strongest lever found (g = 0.499 across 222 classroom studies, verified)."
+              },
+              "verified": "supported"
+            },
+            {
+              "text": "Execution traces are the only comprehension aid with a controlled positive result, and the finding is marked verified.",
+              "backing": {
+                "file": ".grokcheck/sources/readme-2.md",
+                "lines": [
+                  31,
+                  31
+                ],
+                "quote": "Execution traces are the only comprehension aid with a controlled positive result (Cornelissen 2009: 21% less time, 43% more correct, verified)."
+              },
+              "verified": "supported"
+            }
+          ]
+        }
+      ],
+      "checkpoints": [
+        {
+          "id": "s3-notshown",
+          "type": "single_choice",
+          "prompt": "A claim cites lines that neither prove it true nor prove it wrong. Which verdict should the grounding pass give it?",
+          "options": [
+            {
+              "text": "`not_shown`, since the evidence shows neither",
+              "why": "The manifest rules say `not_shown` when the evidence shows neither, or is missing."
+            },
+            {
+              "text": "`supported`, since nothing contradicts it",
+              "why": "Misconception: no counter-evidence means support. A claim is supported only when the evidence shows it is true."
+            },
+            {
+              "text": "`contradicted`, since nothing supports it",
+              "why": "Misconception: no support means the claim is false. Contradicted needs evidence that shows it is false."
+            }
+          ],
+          "correct": 0,
+          "explanation": "The subagent judges from the evidence alone, so a gap in the evidence is reported as a gap."
+        },
+        {
+          "id": "s3-research",
+          "type": "single_choice",
+          "prompt": "A design choice rests on a research claim with no \"(verified)\" mark. What do the research notes say to do with it?",
+          "options": [
+            {
+              "text": "Treat it as settled, since it is in the notes.",
+              "why": "Misconception: written down means checked. The notes say the unmarked claims still need checking."
+            },
+            {
+              "text": "Drop it, since an unmarked claim is wrong.",
+              "why": "Misconception: unchecked means false. The notes say it needs checking, not that it fails."
+            },
+            {
+              "text": "Check it before it drives a decision.",
+              "why": "The notes mark checked claims \"(verified)\" and ask for the rest to be checked first."
+            }
+          ],
+          "correct": 2,
+          "explanation": "An unmarked claim is not known to be wrong. It is not yet known to be right."
+        }
+      ]
+    }
+  ],
+  "final": [
+    {
+      "id": "f-predict",
+      "type": "single_choice",
+      "prompt": "The grounding pass marks one claim of a draft `contradicted`. Predict what the skill tells the author to do before serving.",
+      "options": [
+        {
+          "text": "Delete the claim so the check passes.",
+          "why": "Misconception: the check is an obstacle. The skill says to never delete a claim to get past the check."
+        },
+        {
+          "text": "Rewrite it to say what the evidence shows.",
+          "why": "The skill asks for the claim, and any prose or question resting on it, to be rewritten from the evidence."
+        },
+        {
+          "text": "Serve it with a warning badge for the reader.",
+          "why": "Misconception: a contradicted claim can be served with a flag. The skill asks for the rewrite before the lesson is served."
+        }
+      ],
+      "correct": 1,
+      "explanation": "A rewritten claim goes through the grounding subagent again, and the lesson is validated once more."
+    },
+    {
+      "id": "f-summary",
+      "type": "single_choice",
+      "prompt": "A teammate writes: \"grokcheck asks how well you understood each section, and the agent checks its own claims.\" Which correction is right?",
+      "options": [
+        {
+          "text": "It is right, since you rate your confidence before each reveal.",
+          "why": "Misconception: the confidence rating is the test. It is only compared with your graded answer."
+        },
+        {
+          "text": "You answer graded questions, and the agent checks claims from memory.",
+          "why": "Misconception: the author checks its own work. A separate subagent does, from the evidence alone."
+        },
+        {
+          "text": "You answer graded questions, and a fresh subagent checks claims against evidence.",
+          "why": "Understanding is tested, not self-reported, and a fresh-context subagent judges each claim from its evidence."
+        }
+      ],
+      "correct": 2,
+      "explanation": "Both halves of the summary were wrong: understanding is tested, and the checker sees only the evidence."
+    },
+    {
+      "id": "f-order",
+      "type": "order_steps",
+      "prompt": "Put the steps the agent follows for one lesson in order.",
+      "steps": [
+        "Agree the scope with the reader",
+        "Plan the lesson",
+        "Author the sections in parallel",
+        "Validate and ground the claims",
+        "Serve the lesson",
+        "Wait for events and reply",
+        "Debrief the results"
+      ],
+      "explanation": "These are the numbered steps of the skill. Grounding comes before serving, so the reader never sees a contradicted claim."
+    },
+    {
+      "id": "f-explain",
+      "type": "open_answer",
+      "prompt": "In one or two sentences, say what grokcheck is for and who it is for.",
+      "model_answer": "grokcheck is for a developer who has to understand code they did not write, often code an agent just wrote. It teaches the code in a gated lesson and tests them, so they know whether they understand it instead of only feeling that they do.",
+      "rubric": [
+        "Names the reader: a developer facing code they did not write",
+        "Says the lesson tests understanding rather than asking for a self-rating",
+        "States the purpose, not the steps"
+      ],
+      "explanation": "Met: \"It quizzes developers on code an agent wrote, so they learn what they understand.\" Unmet: \"It runs scope, plan, author, ground, serve and wait.\""
+    }
+  ]
+}

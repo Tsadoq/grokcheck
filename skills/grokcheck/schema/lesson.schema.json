@@ -7,8 +7,12 @@
   "required": ["schema_version", "title", "scope", "sections", "final"],
   "additionalProperties": false,
   "properties": {
-    "schema_version": {"const": 1},
+    "schema_version": {"const": 2},
     "title": {"$ref": "#/$defs/text"},
+    "intro": {
+      "description": "A short spoken-style opening shown above the first section; the media skill uses it as the video intro script.",
+      "$ref": "#/$defs/text"
+    },
     "seed": {
       "description": "Fixes the shuffled order of order_steps steps; defaults to a hash of the title.",
       "type": "integer"
@@ -26,6 +30,16 @@
         }
       }
     },
+    "plan": {"$ref": "#/$defs/plan"},
+    "probe": {
+      "description": "Closed questions asked before the first section to set the starting depth; never scored.",
+      "type": "array",
+      "maxItems": 2,
+      "items": {
+        "$ref": "#/$defs/question",
+        "not": {"required": ["type"], "properties": {"type": {"const": "open_answer"}}}
+      }
+    },
     "sections": {
       "type": "array",
       "minItems": 1,
@@ -38,7 +52,44 @@
       "items": {"$ref": "#/$defs/question"}
     }
   },
+  "if": {
+    "required": ["plan"],
+    "properties": {"plan": {"required": ["time_budget"], "properties": {"time_budget": {"const": 5}}}}
+  },
+  "then": {"properties": {"sections": {"maxItems": 1}}},
   "$defs": {
+    "plan": {
+      "description": "Why the lesson is shaped as it is. Every `media` entry must be a type some section uses.",
+      "type": "object",
+      "required": ["subject", "time_budget", "content", "media", "rejected", "rationale", "default_depth"],
+      "additionalProperties": false,
+      "properties": {
+        "subject": {"enum": ["change", "area", "concept", "library", "options", "decision", "document"]},
+        "time_budget": {
+          "description": "Minutes; a 5-minute lesson has one section.",
+          "enum": [5, 15, 30]
+        },
+        "content": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["structure", "behaviour", "change", "tests"]}
+        },
+        "media": {
+          "description": "Element or question types the lesson uses.",
+          "$ref": "#/$defs/texts"
+        },
+        "rejected": {
+          "description": "Element or question types considered and left out.",
+          "$ref": "#/$defs/texts"
+        },
+        "rationale": {
+          "description": "Sentences shown to the reader on why the lesson looks like this.",
+          "$ref": "#/$defs/texts",
+          "minItems": 1
+        },
+        "default_depth": {"enum": ["short", "detail"]}
+      }
+    },
     "text": {
       "type": "string",
       "pattern": "\\S"
@@ -47,6 +98,7 @@
       "type": "array",
       "items": {"$ref": "#/$defs/text"}
     },
+    "playground_outcome": {"enum": ["complete", "lost", "hang"]},
     "identifier": {
       "type": "string",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
@@ -59,10 +111,18 @@
         "id": {"$ref": "#/$defs/identifier"},
         "title": {"$ref": "#/$defs/text"},
         "body": {
-          "description": "Markdown explanation shown before the checkpoints.",
+          "description": "Markdown lead explanation, shown before the elements.",
           "$ref": "#/$defs/text"
         },
-        "code": {"$ref": "#/$defs/code"},
+        "code": {
+          "description": "Sugar for a leading `code` element holding this block.",
+          "$ref": "#/$defs/code"
+        },
+        "elements": {
+          "description": "Typed elements shown after the body, in this order.",
+          "type": "array",
+          "items": {"$ref": "#/$defs/element"}
+        },
         "checkpoints": {
           "type": "array",
           "minItems": 1,
@@ -70,6 +130,539 @@
           "items": {"$ref": "#/$defs/question"}
         }
       }
+    },
+    "depth": {
+      "description": "`detail` elements are hidden when the reader picks the short view.",
+      "enum": ["short", "detail"],
+      "default": "short"
+    },
+    "element": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {"enum": ["prose", "code", "diff", "vocab", "trace", "spike", "playground", "diagram", "options", "assumptions", "video"]}
+      },
+      "allOf": [
+        {
+          "if": {"required": ["type"], "properties": {"type": {"const": "prose"}}},
+          "then": {
+            "required": ["markdown"],
+            "additionalProperties": false,
+            "properties": {
+              "type": true,
+              "depth": {"$ref": "#/$defs/depth"},
+              "claims": {"$ref": "#/$defs/claims"},
+              "markdown": {"$ref": "#/$defs/text"}
+            }
+          }
+        },
+        {
+          "if": {"required": ["type"], "properties": {"type": {"const": "code"}}},
+          "then": {
+            "required": ["code"],
+            "additionalProperties": false,
+            "properties": {
+              "type": true,
+              "depth": {"$ref": "#/$defs/depth"},
+              "claims": {"$ref": "#/$defs/claims"},
+              "code": {"$ref": "#/$defs/code"},
+              "caption": {"$ref": "#/$defs/text"}
+            }
+          }
+        },
+        {
+          "if": {"required": ["type"], "properties": {"type": {"const": "diff"}}},
+          "then": {
+            "description": "One hunk as `grokcheck diff` prints it. Note and ask lines must lie on the new side.",
+            "required": ["file", "old_start", "new_start", "lines"],
+            "additionalProperties": false,
+            "properties": {
+              "type": true,
+              "depth": {"$ref": "#/$defs/depth"},
+              "claims": {"$ref": "#/$defs/claims"},
+              "file": {"$ref": "#/$defs/text"},
+              "old_start": {"type": "integer", "minimum": 0},
+              "new_start": {"type": "integer", "minimum": 0},
+              "lines": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": ["op", "text"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "op": {"enum": [" ", "+", "-"]},
+                    "text": {"type": "string"}
+                  }
+                }
+              },
+              "notes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["lines", "cite", "text"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "lines": {"$ref": "#/$defs/lines"},
+                    "cite": {"$ref": "#/$defs/backing/oneOf/0"},
+                    "text": {"$ref": "#/$defs/text"}
+                  }
+                }
+              },
+              "asks": {
+                "description": "Ungraded questions on one new-side line; `answer` is shown when the reader asks.",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["line", "question", "answer"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "line": {"type": "integer", "minimum": 1},
+                    "question": {"$ref": "#/$defs/text"},
+                    "answer": {"$ref": "#/$defs/text"}
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {"required": ["type"], "properties": {"type": {"const": "vocab"}}},
+          "then": {
+            "description": "Terms beside the code they appear in. `min_opened` may not exceed the number of terms; term `lines` count from 1 at the first line of `code`. If any term has `library_term`, the element is a translation table and every term must have it, `null` where there is no equivalent.",
+            "required": ["terms"],
+            "additionalProperties": false,
+            "properties": {
+              "type": true,
+              "depth": {"$ref": "#/$defs/depth"},
+              "claims": {"$ref": "#/$defs/claims"},
+              "code": {"$ref": "#/$defs/code"},
+              "min_opened": {"type": "integer", "minimum": 1, "default": 3},
+              "owners": {
+                "description": "A legend mapping each owner label to a page colour token. With it, every term's `owner` must be one of its labels; without it, `ours`, `library` or `stdlib`.",
+                "type": "object",
+                "minProperties": 1,
+                "propertyNames": {"pattern": "\\S"},
+                "additionalProperties": {"enum": ["accent", "good", "bad", "warn", "muted"]}
+              },
+              "terms": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": ["term", "owner", "definition"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "term": {"$ref": "#/$defs/text"},
+                    "owner": {"$ref": "#/$defs/text"},
+                    "definition": {"$ref": "#/$defs/text"},
+                    "lines": {"type": "array", "items": {"type": "integer", "minimum": 1}},
+                    "detail": {"$ref": "#/$defs/text"},
+                    "library_term": {"anyOf": [{"$ref": "#/$defs/text"}, {"type": "null"}]},
+                    "false_friend": {"type": "boolean", "default": false}
+                  }
+                }
+              }
+            },
+            "anyOf": [
+              {"properties": {"terms": {"items": {"required": ["library_term"]}}}},
+              {"properties": {"terms": {"items": {"not": {"required": ["library_term"]}}}}}
+            ],
+            "if": {"not": {"required": ["owners"]}},
+            "then": {"properties": {"terms": {"items": {"properties": {"owner": {"enum": ["ours", "library", "stdlib"]}}}}}}
+          }
+        },
+        {
+          "if": {"required": ["type"], "properties": {"type": {"const": "video"}}},
+          "then": {
+            "description": "A narrated video built by `grokcheck_media video chapter`. `src` and `captions` are absolute paths to existing files inside the lesson directory or ~/.cache/grokcheck/videos/, and the section needs a checkpoint about it.",
+            "required": ["id", "src", "captions", "duration", "transcript"],
+            "additionalProperties": false,
+            "properties": {
+              "type": true,
+              "depth": {"$ref": "#/$defs/depth"},
+              "claims": {"$ref": "#/$defs/claims"},
+              "id": {"$ref": "#/$defs/identifier"},
+              "src": {"$ref": "#/$defs/text"},
+              "captions": {"$ref": "#/$defs/text"},
+              "duration": {"type": "number", "exclusiveMinimum": 0},
+              "transcript": {"$ref": "#/$defs/text"}
+            }
+          }
+        },
+        {
+          "if": {"required": ["type"], "properties": {"type": {"const": "diagram"}}},
+          "then": {
+            "description": "A Mermaid diagram of 7 to 12 nodes (over 12 is refused). Every flowchart edge needs a label, and the section needs a checkpoint about it.",
+            "required": ["mermaid", "caption"],
+            "additionalProperties": false,
+            "properties": {
+              "type": true,
+              "depth": {"$ref": "#/$defs/depth"},
+              "claims": {"$ref": "#/$defs/claims"},
+              "mermaid": {"$ref": "#/$defs/text"},
+              "caption": {"$ref": "#/$defs/text"},
+              "legend": {"$ref": "#/$defs/text"},
+              "kind": {
+                "enum": ["flowchart", "sequence", "state", "class", "er", "before_after"],
+                "default": "flowchart"
+              }
+            }
+          }
+        },
+        {
+          "if": {"required": ["type"], "properties": {"type": {"const": "options"}}},
+          "then": {
+            "description": "An options table for `question`. It holds at least one option of each standing `do_nothing`, `existing_dependency` and `build`. With `reader_first` (default true) `criteria` and `options` are withheld until the reader commits their own options under `id`.",
+            "required": ["id", "question", "criteria", "options"],
+            "additionalProperties": false,
+            "properties": {
+              "type": true,
+              "depth": {"$ref": "#/$defs/depth"},
+              "claims": {"$ref": "#/$defs/claims"},
+              "id": {"$ref": "#/$defs/identifier"},
+              "question": {"$ref": "#/$defs/text"},
+              "criteria": {"$ref": "#/$defs/texts", "minItems": 1},
+              "reader_first": {"type": "boolean", "default": true},
+              "options": {
+                "type": "array",
+                "minItems": 3,
+                "allOf": [
+                  {"contains": {"properties": {"standing": {"const": "do_nothing"}}}},
+                  {"contains": {"properties": {"standing": {"const": "existing_dependency"}}}},
+                  {"contains": {"properties": {"standing": {"const": "build"}}}}
+                ],
+                "items": {
+                  "type": "object",
+                  "required": ["name", "costs", "assumes", "standing"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {"$ref": "#/$defs/text"},
+                    "costs": {"$ref": "#/$defs/text"},
+                    "assumes": {"$ref": "#/$defs/text"},
+                    "standing": {"enum": ["do_nothing", "existing_dependency", "build", "other"]},
+                    "sketch": {"$ref": "#/$defs/code"},
+                    "constraints": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": ["text", "hard"],
+                        "additionalProperties": false,
+                        "properties": {
+                          "text": {"$ref": "#/$defs/text"},
+                          "hard": {"type": "boolean"},
+                          "waivable_by": {"$ref": "#/$defs/text"}
+                        },
+                        "if": {"properties": {"hard": {"const": true}}},
+                        "then": {"not": {"required": ["waivable_by"]}}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {"required": ["type"], "properties": {"type": {"const": "assumptions"}}},
+          "then": {
+            "description": "Assumptions a choice rests on. The page answers `id` like a question, with one confidence per item; `checked_by_spike` names a spike with a recorded result under `.grokcheck/spikes/`.",
+            "required": ["id", "items"],
+            "additionalProperties": false,
+            "properties": {
+              "type": true,
+              "depth": {"$ref": "#/$defs/depth"},
+              "claims": {"$ref": "#/$defs/claims"},
+              "id": {"$ref": "#/$defs/identifier"},
+              "items": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": ["claim", "backing"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "claim": {"$ref": "#/$defs/text"},
+                    "backing": {"$ref": "#/$defs/backing"},
+                    "checked_by_spike": {"$ref": "#/$defs/identifier"},
+                    "verified": {"$ref": "#/$defs/claims/items/properties/verified"}
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {"required": ["type"], "properties": {"type": {"const": "spike"}}},
+          "then": {
+            "description": "A spike read from `.grokcheck/spikes/<spike_id>/` (`result.json` and `spike.py`, written by `grokcheck spike run`). Its recorded run is withheld until `gate`, a `predict_output` checkpoint of the same section, is answered; that checkpoint's correct option or an accepted answer must equal the recorded stdout.",
+            "required": ["spike_id", "gate"],
+            "additionalProperties": false,
+            "properties": {
+              "type": true,
+              "depth": {"$ref": "#/$defs/depth"},
+              "claims": {"$ref": "#/$defs/claims"},
+              "spike_id": {"$ref": "#/$defs/identifier"},
+              "gate": {"$ref": "#/$defs/identifier"}
+            }
+          }
+        },
+        {
+          "if": {"required": ["type"], "properties": {"type": {"const": "playground"}}},
+          "then": {
+            "description": "Sliders over a state table recorded from real runs. `states` is keyed by the input values joined with `,` in input order and must hold every combination of slider values exactly once. Each state has one cell class per tick for every row id and one outcome per variant; a cell is `\"\"` or a legend `cell`. Variants are row ids; task conditions name variants. A constraint keeps input `after` above input `gt`.",
+            "required": ["inputs", "variants", "ticks", "rows", "legend", "states"],
+            "additionalProperties": false,
+            "properties": {
+              "type": true,
+              "depth": {"$ref": "#/$defs/depth"},
+              "claims": {"$ref": "#/$defs/claims"},
+              "inputs": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": ["id", "label", "min", "max"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {"$ref": "#/$defs/identifier"},
+                    "label": {"$ref": "#/$defs/text"},
+                    "min": {"type": "integer"},
+                    "max": {"type": "integer"},
+                    "step": {"type": "integer", "minimum": 1, "default": 1},
+                    "value": {"type": "integer", "description": "Starting value; defaults to `min`."}
+                  }
+                }
+              },
+              "constraints": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["after", "gt"],
+                  "additionalProperties": false,
+                  "properties": {"after": {"$ref": "#/$defs/text"}, "gt": {"$ref": "#/$defs/text"}}
+                }
+              },
+              "presets": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["label", "values"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "label": {"$ref": "#/$defs/text"},
+                    "values": {"type": "object", "additionalProperties": {"type": "integer"}}
+                  }
+                }
+              },
+              "variants": {"$ref": "#/$defs/texts", "minItems": 1},
+              "ticks": {"type": "integer", "minimum": 1},
+              "rows": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": ["id", "label"],
+                  "additionalProperties": false,
+                  "properties": {"id": {"$ref": "#/$defs/identifier"}, "label": {"$ref": "#/$defs/text"}}
+                }
+              },
+              "legend": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": ["cell", "label", "colour"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "cell": {"$ref": "#/$defs/text"},
+                    "label": {"$ref": "#/$defs/text"},
+                    "colour": {"enum": ["accent", "good", "bad", "warn", "muted"]}
+                  }
+                }
+              },
+              "states": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "required": ["cells", "outcomes", "explain"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "cells": {
+                      "type": "object",
+                      "additionalProperties": {"type": "array", "items": {"type": "string"}}
+                    },
+                    "outcomes": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": ["outcome"],
+                        "additionalProperties": false,
+                        "properties": {
+                          "outcome": {"$ref": "#/$defs/playground_outcome"},
+                          "lost": {"type": "integer", "minimum": 0, "default": 0}
+                        }
+                      }
+                    },
+                    "explain": {"$ref": "#/$defs/text"}
+                  }
+                }
+              },
+              "tasks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["text", "when"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "text": {"$ref": "#/$defs/text"},
+                    "when": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "object",
+                        "required": ["variant", "outcome"],
+                        "additionalProperties": false,
+                        "properties": {
+                          "variant": {"$ref": "#/$defs/text"},
+                          "outcome": {"$ref": "#/$defs/playground_outcome"},
+                          "min_lost": {"type": "integer", "minimum": 0, "default": 0}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {"required": ["type"], "properties": {"type": {"const": "trace"}}},
+          "then": {
+            "description": "A stepper over recorded runs. Each version reads `.grokcheck/traces/<trace_id>.json` (its own `trace_id`, else the element's); authored step `i` overlays recorded step `at`, default `i`. `state` keys are panel ids. `gate` names a `predict_state` checkpoint of the same section on this trace.",
+            "required": ["trace_id", "title", "versions", "panels"],
+            "additionalProperties": false,
+            "properties": {
+              "type": true,
+              "depth": {"$ref": "#/$defs/depth"},
+              "claims": {"$ref": "#/$defs/claims"},
+              "trace_id": {"$ref": "#/$defs/identifier"},
+              "title": {"$ref": "#/$defs/text"},
+              "gate": {"$ref": "#/$defs/identifier"},
+              "panels": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": ["id", "label", "kind"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {"$ref": "#/$defs/identifier"},
+                    "label": {"$ref": "#/$defs/text"},
+                    "kind": {"enum": ["status", "chips", "nullable_chips"]}
+                  }
+                }
+              },
+              "versions": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": ["label", "code", "steps"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "label": {"$ref": "#/$defs/text"},
+                    "code": {"$ref": "#/$defs/code"},
+                    "trace_id": {"$ref": "#/$defs/identifier"},
+                    "steps": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "object",
+                        "required": ["narration", "state"],
+                        "additionalProperties": false,
+                        "properties": {
+                          "narration": {"$ref": "#/$defs/texts", "minItems": 1},
+                          "state": {"type": "object"},
+                          "at": {"type": "integer", "minimum": 0}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "lines": {
+      "description": "An inclusive 1-based [start, end] span.",
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {"type": "integer", "minimum": 1}
+    },
+    "claims": {
+      "description": "Statements the element makes, each with the one piece of evidence behind it.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["text", "backing"],
+        "additionalProperties": false,
+        "properties": {
+          "text": {"$ref": "#/$defs/text"},
+          "backing": {"$ref": "#/$defs/backing"},
+          "verified": {
+            "description": "The grounding pass's verdict. A `contradicted` claim is refused, so it is not listed.",
+            "enum": ["supported", "unchecked"],
+            "default": "unchecked"
+          }
+        }
+      }
+    },
+    "backing": {
+      "description": "Exactly one kind of evidence: project lines, an outside source, a spike, or none yet.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["file", "lines"],
+          "additionalProperties": false,
+          "properties": {
+            "file": {"$ref": "#/$defs/text"},
+            "lines": {"$ref": "#/$defs/lines"},
+            "symbol": {
+              "description": "A name that must appear in the cited lines.",
+              "$ref": "#/$defs/text"
+            },
+            "quote": {
+              "description": "Text that appears in the cited lines up to whitespace. Required when `file` is under `.grokcheck/sources/`.",
+              "$ref": "#/$defs/text"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["url", "version"],
+          "additionalProperties": false,
+          "properties": {
+            "url": {"$ref": "#/$defs/text"},
+            "version": {"$ref": "#/$defs/text"}
+          }
+        },
+        {
+          "type": "object",
+          "required": ["spike_id"],
+          "additionalProperties": false,
+          "properties": {"spike_id": {"$ref": "#/$defs/identifier"}}
+        },
+        {
+          "type": "object",
+          "required": ["reason"],
+          "additionalProperties": false,
+          "properties": {"reason": {"$ref": "#/$defs/text"}}
+        }
+      ]
     },
     "code": {
       "description": "Either inline `language` and `text`, or a `file` in the project with an inclusive 1-based `lines` span.",
@@ -80,12 +673,7 @@
         "additionalProperties": false,
         "properties": {
           "file": {"$ref": "#/$defs/text"},
-          "lines": {
-            "type": "array",
-            "minItems": 2,
-            "maxItems": 2,
-            "items": {"type": "integer", "minimum": 1}
-          },
+          "lines": {"$ref": "#/$defs/lines"},
           "language": {"$ref": "#/$defs/text"}
         }
       },
@@ -131,6 +719,17 @@
         "quote_insensitive": {"type": "boolean", "default": false}
       }
     },
+    "mutation": {
+      "description": "Line `line` (1-based) of project file `file` set to `replacement`; null or absent deletes the line.",
+      "type": "object",
+      "required": ["file", "line"],
+      "additionalProperties": false,
+      "properties": {
+        "file": {"$ref": "#/$defs/text"},
+        "line": {"type": "integer", "minimum": 1},
+        "replacement": {"type": ["string", "null"]}
+      }
+    },
     "question": {
       "type": "object",
       "required": ["id", "type", "prompt"],
@@ -143,7 +742,12 @@
             "predict_output",
             "pick_line",
             "order_steps",
-            "fill_blank"
+            "fill_blank",
+            "predict_state",
+            "mutation_quiz",
+            "fix_the_bug",
+            "change_impact",
+            "parsons"
           ]
         }
       },
@@ -291,6 +895,140 @@
                 "type": "array",
                 "minItems": 1,
                 "items": {"$ref": "#/$defs/blank"}
+              }
+            }
+          }
+        },
+        {
+          "if": {"required": ["type"], "properties": {"type": {"const": "predict_state"}}},
+          "then": {
+            "description": "Only as a checkpoint of the section holding trace `trace_id`; `version` and `step` are 0-based and must exist. Graded as `single_choice`.",
+            "required": ["trace_id", "version", "step", "options", "correct"],
+            "additionalProperties": false,
+            "properties": {
+              "id": {"$ref": "#/$defs/identifier"},
+              "type": true,
+              "prompt": {"$ref": "#/$defs/text"},
+              "explanation": {"$ref": "#/$defs/text"},
+              "code": {"$ref": "#/$defs/code"},
+              "trace_id": {"$ref": "#/$defs/identifier"},
+              "version": {"type": "integer", "minimum": 0},
+              "step": {"type": "integer", "minimum": 0},
+              "options": {"$ref": "#/$defs/options"},
+              "correct": {"$ref": "#/$defs/optionIndex"}
+            }
+          }
+        },
+        {
+          "if": {"required": ["type"], "properties": {"type": {"const": "mutation_quiz"}}},
+          "then": {
+            "description": "Recorded by `grokcheck mutate`. The reader ticks the tests that fail on the mutant; graded by exact set match.",
+            "required": ["mutation", "tests", "log"],
+            "additionalProperties": false,
+            "properties": {
+              "id": {"$ref": "#/$defs/identifier"},
+              "type": true,
+              "prompt": {"$ref": "#/$defs/text"},
+              "explanation": {"$ref": "#/$defs/text"},
+              "mutation": {"$ref": "#/$defs/mutation"},
+              "tests": {
+                "description": "Every test the reader may tick, with whether it fails on the mutant. Names are unique.",
+                "type": "array",
+                "minItems": 1,
+                "contains": {"properties": {"fails": {"const": true}}},
+                "items": {
+                  "type": "object",
+                  "required": ["name", "fails"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {"$ref": "#/$defs/text"},
+                    "fails": {"type": "boolean"}
+                  }
+                }
+              },
+              "log": {
+                "description": "The tail of the mutant run's output.",
+                "$ref": "#/$defs/text"
+              }
+            }
+          }
+        },
+        {
+          "if": {"required": ["type"], "properties": {"type": {"const": "fix_the_bug"}}},
+          "then": {
+            "description": "The reader repairs the mutant planted by `grokcheck mutate` in `worktree`, an existing directory outside the project; the server runs `test_command` there to grade it.",
+            "required": ["mutation", "worktree", "test_command"],
+            "additionalProperties": false,
+            "properties": {
+              "id": {"$ref": "#/$defs/identifier"},
+              "type": true,
+              "prompt": {"$ref": "#/$defs/text"},
+              "explanation": {"$ref": "#/$defs/text"},
+              "mutation": {
+                "description": "`replacement` is the original line, as the project has it now.",
+                "$ref": "#/$defs/mutation",
+                "required": ["replacement"],
+                "properties": {"replacement": {"type": "string"}}
+              },
+              "worktree": {"$ref": "#/$defs/text"},
+              "test_command": {"$ref": "#/$defs/texts", "minItems": 1}
+            }
+          }
+        },
+        {
+          "if": {"required": ["type"], "properties": {"type": {"const": "change_impact"}}},
+          "then": {
+            "description": "The reader ticks the `candidates`, callers or tests, that `change` affects.",
+            "required": ["change", "candidates", "affected"],
+            "additionalProperties": false,
+            "properties": {
+              "id": {"$ref": "#/$defs/identifier"},
+              "type": true,
+              "prompt": {"$ref": "#/$defs/text"},
+              "explanation": {"$ref": "#/$defs/text"},
+              "code": {"$ref": "#/$defs/code"},
+              "change": {"$ref": "#/$defs/text"},
+              "candidates": {"$ref": "#/$defs/options"},
+              "affected": {
+                "description": "0-based indexes into `candidates`.",
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {"$ref": "#/$defs/optionIndex"}
+              }
+            }
+          }
+        },
+        {
+          "if": {"required": ["type"], "properties": {"type": {"const": "parsons"}}},
+          "then": {
+            "description": "The reader assembles `lines` from them shuffled with the `distractors`, and indents each; every text must be distinct.",
+            "required": ["lines", "distractors"],
+            "additionalProperties": false,
+            "properties": {
+              "id": {"$ref": "#/$defs/identifier"},
+              "type": true,
+              "prompt": {"$ref": "#/$defs/text"},
+              "explanation": {"$ref": "#/$defs/text"},
+              "lines": {
+                "description": "The solution in order; `indent` counts levels from 0.",
+                "type": "array",
+                "minItems": 2,
+                "items": {
+                  "type": "object",
+                  "required": ["text", "indent"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "text": {"$ref": "#/$defs/text"},
+                    "indent": {"type": "integer", "minimum": 0}
+                  }
+                }
+              },
+              "distractors": {
+                "description": "Lines that do not belong; `why` says why.",
+                "type": "array",
+                "minItems": 1,
+                "items": {"$ref": "#/$defs/option"}
               }
             }
           }

@@ -2,7 +2,8 @@
 
 Responses arrive as decoded JSON from the browser, shaped per question type:
 
-- `single_choice`, choice-mode `predict_output`: the chosen option index.
+- `single_choice`, `predict_state`, choice-mode `predict_output`: the chosen
+  option index.
 - `multiple_choice`: a list of option indexes; `pick_line`: a list of line numbers.
 - free-text `predict_output`: the typed output.
 - `order_steps`: the step texts in the reader's order.
@@ -10,6 +11,10 @@ Responses arrive as decoded JSON from the browser, shaped per question type:
   question has a single blank.
 - `open_answer`: `{"text": ..., "met": [...]}`, one boolean per rubric item from
   the reader's self-rating.
+- `mutation_quiz`: a list of the test names the reader ticked as failing.
+- `fix_the_bug`: `{"passed": ...}`, the result of the server's own test run.
+- `change_impact`: a list of candidate indexes.
+- `parsons`: `[{"text": ..., "indent": ...}]`, the lines the reader placed, in order.
 
 A response of the wrong shape raises `ResponseError`.
 """
@@ -24,13 +29,22 @@ from typing import TYPE_CHECKING, Literal
 
 from grokcheck.lesson import (
     Blank,
+    ChangeImpact,
     FillBlank,
+    FixTheBug,
     MultipleChoice,
+    Mutation,
+    MutationQuiz,
     OpenAnswer,
+    Option,
     OrderSteps,
+    Parsons,
+    ParsonsLine,
     PickLine,
     PredictOutput,
+    PredictState,
     SingleChoice,
+    TestCase,
 )
 
 if TYPE_CHECKING:
@@ -40,7 +54,9 @@ if TYPE_CHECKING:
 
 Outcome = Literal["correct", "incorrect", "partial", "needs_review", "self_rated"]
 Confidence = Literal["sure", "unsure", "guess"]
-Response = int | str | list[int] | list[str] | dict[str, object]
+Response = (
+    int | str | list[int] | list[str] | list[dict[str, object]] | dict[str, object]
+)
 
 _CURLY_QUOTES = str.maketrans(
     {
@@ -68,6 +84,10 @@ class Reveal:
 
     `why` is aligned with the question's options; `accepted` holds free-text
     `predict_output` answers and `blanks` the fill-the-blank answer key.
+    `tests` and `log` are a mutation quiz's run; `mutation` is a fixed bug's
+    original line.
+    `lines` and `distractors` are a Parsons problem's solution and decoys.
+    `element_payload` is what a gated element withheld until this answer.
     """
 
     explanation: str
@@ -79,6 +99,12 @@ class Reveal:
     blanks: tuple[Blank, ...] = ()
     model_answer: str = ""
     rubric: tuple[str, ...] = ()
+    tests: tuple[TestCase, ...] = ()
+    log: str = ""
+    mutation: Mutation | None = None
+    lines: tuple[ParsonsLine, ...] = ()
+    distractors: tuple[Option, ...] = ()
+    element_payload: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -161,18 +187,24 @@ def normalise(
     return text if case_sensitive else text.casefold()
 
 
-def _grade(question: Question, response: Response) -> tuple[Outcome, float, Reveal]:
+def _grade(  # noqa: C901
+    question: Question, response: Response
+) -> tuple[Outcome, float, Reveal]:
     explanation = question.explanation
     match question:
         case (
             SingleChoice(options=options, correct=int() as correct)
             | PredictOutput(options=options, correct=int() as correct)
+            | PredictState(options=options, correct=correct)
         ):
             result = _exact(_index(response, len(options)) == correct)
             reveal = Reveal(
                 explanation, why=tuple(o.why for o in options), correct=(correct,)
             )
-        case MultipleChoice(options=options, correct=correct_set):
+        case (
+            MultipleChoice(options=options, correct=correct_set)
+            | ChangeImpact(candidates=options, affected=correct_set)
+        ):
             chosen = {_index(item, len(options)) for item in _items(response)}
             result = _overlap(chosen, set(correct_set))
             reveal = Reveal(
@@ -195,6 +227,16 @@ def _grade(question: Question, response: Response) -> tuple[Outcome, float, Reve
         case OpenAnswer(model_answer=model_answer, rubric=rubric):
             result = ("self_rated", _self_rating(response, len(rubric)))
             reveal = Reveal(explanation, model_answer=model_answer, rubric=rubric)
+        case MutationQuiz(tests=tests, log=log):
+            failing = {test.name for test in tests if test.fails}
+            result = _exact(_ticked(response) == failing)
+            reveal = Reveal(explanation, tests=tests, log=log)
+        case FixTheBug(mutation=mutation):
+            result = _exact(_passed(response))
+            reveal = Reveal(explanation, mutation=mutation)
+        case Parsons(lines=lines, distractors=distractors):
+            result = _parsons(response, lines, distractors)
+            reveal = Reveal(explanation, lines=lines, distractors=distractors)
     return (*result, reveal)
 
 
@@ -225,6 +267,45 @@ def _order(response: Response, steps: tuple[str, ...]) -> tuple[Outcome, float]:
     if positions == sorted(positions):
         return "correct", 1.0
     return "partial", _longest_increasing(positions) / len(steps)
+
+
+def _parsons(
+    response: Response,
+    lines: tuple[ParsonsLine, ...],
+    distractors: tuple[Option, ...],
+) -> tuple[Outcome, float]:
+    """Score zero with any distractor, else lines placed in order at their indent."""
+    placed = [_placed_line(item) for item in _items(response)]
+    texts = [line.text for line in lines]
+    decoys = {d.text for d in distractors}
+    shown = [text for text, _ in placed]
+    if len(set(shown)) != len(shown) or not set(shown) <= set(texts) | decoys:
+        msg = "must list known lines, each at most once"
+        raise ResponseError(msg)
+    if decoys & set(shown):
+        return "incorrect", 0.0
+    if placed == [(line.text, line.indent) for line in lines]:
+        return "correct", 1.0
+    positions = [
+        texts.index(text)
+        for text, indent in placed
+        if indent == lines[texts.index(text)].indent
+    ]
+    score = _longest_increasing(positions) / len(lines)
+    return ("partial" if score else "incorrect"), score
+
+
+def _placed_line(item: object) -> tuple[str, int]:
+    text = item.get("text") if isinstance(item, dict) else None
+    indent = item.get("indent") if isinstance(item, dict) else None
+    if (
+        not isinstance(text, str)
+        or not isinstance(indent, int)
+        or isinstance(indent, bool)
+    ):
+        msg = "each placed line must carry 'text' and an integer 'indent'"
+        raise ResponseError(msg)
+    return text, indent
 
 
 def _longest_increasing(values: Sequence[int]) -> int:
@@ -295,6 +376,22 @@ def _self_rating(response: Response, rubric_size: int) -> float:
         msg = f"must carry 'met' with one boolean per rubric item ({rubric_size})"
         raise ResponseError(msg)
     return sum(met) / rubric_size
+
+
+def _ticked(response: Response) -> set[str]:
+    ticked = _items(response)
+    if not all(isinstance(item, str) for item in ticked):
+        msg = "must list test names"
+        raise ResponseError(msg)
+    return {str(item) for item in ticked}
+
+
+def _passed(response: Response) -> bool:
+    passed = response.get("passed") if isinstance(response, dict) else None
+    if not isinstance(passed, bool):
+        msg = "must carry 'passed' as true or false"
+        raise ResponseError(msg)
+    return passed
 
 
 def _index(value: object, count: int, *, first: int = 0) -> int:

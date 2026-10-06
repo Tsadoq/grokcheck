@@ -1,6 +1,13 @@
 import { askQuestion, fetchLesson, followReplies, sendAnswer, submitQuiz } from "./api.js";
+import { GATING_ELEMENTS, renderElements } from "./elements.js";
 import { renderMarkdown } from "./markdown.js";
 import { codeView, element, renderQuestion, renderReveal } from "./questions.js";
+import { recall, remember } from "./storage.js";
+
+const DEPTHS = [
+  ["short", "Short"],
+  ["detail", "Detailed"],
+];
 
 const CONFIDENCE_LEVELS = [
   ["sure", "Sure"],
@@ -69,6 +76,8 @@ function askPanel(section, sectionElement) {
   const askButton = element("button", { type: "button", text: "Ask" });
   const status = element("p", { class: "status", "aria-live": "polite" });
   const threads = element("ul", { class: "threads" });
+  const socratic = element("input", { type: "checkbox", checked: recall("socratic") === "1" });
+  socratic.addEventListener("change", () => remember("socratic", socratic.checked ? "1" : "0"));
 
   const setSelection = (value) => {
     selection = value;
@@ -90,7 +99,8 @@ function askPanel(section, sectionElement) {
       status.textContent = "Type your question first.";
       return;
     }
-    const thread = await askQuestion(section.id, text.value.trim(), selection);
+    const mode = socratic.checked ? "socratic" : "answer";
+    const thread = await askQuestion(section.id, text.value.trim(), selection, mode);
     threads.append(threadView(thread));
     text.value = "";
     setSelection("");
@@ -102,6 +112,7 @@ function askPanel(section, sectionElement) {
     quote,
     clear,
     text,
+    element("label", {}, [socratic, " Socratic: ask me questions instead"]),
     element("div", { class: "actions" }, [captureButton, askButton]),
     status,
     threads,
@@ -177,7 +188,7 @@ function questionCard(question, { final, onAnswered }) {
       }
       if (!saved) {
         saved = true;
-        onAnswered();
+        onAnswered(result);
       }
     },
     update,
@@ -191,27 +202,41 @@ function sectionView(section, index, count, onComplete) {
     element("h2", { text: section.title }),
   ]);
   const content = element("div", { class: "section-body", html: renderMarkdown(section.body) });
-  view.append(content);
-  if (section.code) {
-    view.append(codeView(section.code));
-  }
-  let remaining = section.checkpoints.length;
+  const gates = (item) => GATING_ELEMENTS.has(item.type) && item.depth !== "detail";
+  let remaining = section.checkpoints.length + section.elements.filter(gates).length;
+  const passGate = () => {
+    remaining -= 1;
+    if (remaining === 0) {
+      onComplete();
+    }
+  };
+  view.append(
+    content,
+    renderElements(section, {
+      sectionId: section.id,
+      onComplete: (item) => {
+        if (gates(item)) {
+          passGate();
+        }
+      },
+      markLines: (file, lines) => markLines(view, file, lines),
+    }),
+  );
   view.append(
     element("h3", { text: "Checkpoint" }),
-    ...section.checkpoints.map((question) =>
-      questionCard(question, {
-        final: false,
-        onAnswered: () => {
-          remaining -= 1;
-          if (remaining === 0) {
-            onComplete();
-          }
-        },
-      }),
-    ),
+    ...section.checkpoints.map((question) => questionCard(question, { final: false, onAnswered: passGate })),
     askPanel(section, view),
   );
   return view;
+}
+
+function markLines(view, file, [start, end]) {
+  for (const figure of view.querySelectorAll("figure.code-view[data-file]")) {
+    const first = Number(figure.dataset.start);
+    figure.querySelectorAll(".code-line").forEach((line, at) => {
+      line.classList.toggle("marked", figure.dataset.file === file && first + at >= start && first + at <= end);
+    });
+  }
 }
 
 function showSection(lesson, index) {
@@ -224,6 +249,54 @@ function showSection(lesson, index) {
   if (index > 0) {
     view.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+}
+
+function probeStage(lesson, onDone) {
+  let remaining = lesson.probe.length;
+  let anyWrong = false;
+  stage.append(
+    element("section", { class: "probe" }, [
+      element("h2", { text: "Before you start" }),
+      element("p", { text: "These questions are not scored; they decide how much detail the lesson starts with." }),
+      ...lesson.probe.map((question) =>
+        questionCard(question, {
+          final: false,
+          onAnswered: (result) => {
+            anyWrong ||= result.grade.outcome !== "correct";
+            remaining -= 1;
+            if (remaining === 0) {
+              onDone(anyWrong);
+            }
+          },
+        }),
+      ),
+    ]),
+  );
+}
+
+function depthToggle(initial) {
+  const buttons = DEPTHS.map(([value, label]) => element("button", { type: "button", "data-depth-choice": value, text: label }));
+  const show = (depth) => {
+    document.body.dataset.depthView = depth;
+    for (const button of buttons) {
+      button.setAttribute("aria-pressed", String(button.dataset.depthChoice === depth));
+    }
+  };
+  for (const button of buttons) {
+    button.addEventListener("click", () => {
+      show(button.dataset.depthChoice);
+      remember("depth", button.dataset.depthChoice);
+    });
+  }
+  show(initial);
+  return { element: element("div", { role: "group", "aria-label": "Lesson depth" }, buttons), show };
+}
+
+function planDisclosure(plan) {
+  return element("details", { class: "plan" }, [
+    element("summary", { text: "Why this lesson looks like this" }),
+    element("ul", {}, plan.rationale.map((sentence) => element("li", { text: sentence }))),
+  ]);
 }
 
 function offerFinal(lesson) {
@@ -312,6 +385,24 @@ function showHeader(lesson) {
   if (lesson.scope.files.length > 0) {
     scope.append(element("ul", { class: "files" }, lesson.scope.files.map((file) => element("li", {}, [element("code", { text: file })]))));
   }
+  if (lesson.plan) {
+    document.getElementById("title").after(planDisclosure(lesson.plan));
+  }
+}
+
+function startLesson(lesson) {
+  const planned = lesson.plan?.default_depth ?? "detail";
+  const remembered = recall("depth");
+  const toggle = depthToggle(DEPTHS.some(([value]) => value === remembered) ? remembered : planned);
+  document.getElementById("controls").append(toggle.element);
+  if (lesson.probe.length === 0) {
+    showSection(lesson, 0);
+    return;
+  }
+  probeStage(lesson, (anyWrong) => {
+    toggle.show(anyWrong ? "detail" : planned);
+    showSection(lesson, 0);
+  });
 }
 
 async function main() {
@@ -319,7 +410,7 @@ async function main() {
     const lesson = await fetchLesson();
     showHeader(lesson);
     followReplies(showReply);
-    showSection(lesson, 0);
+    startLesson(lesson);
   } catch (error) {
     stage.replaceChildren(element("p", { class: "error", text: `Could not load the lesson: ${error.message}` }));
   }

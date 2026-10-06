@@ -29,20 +29,54 @@ def _choice(question_id: str, *texts: str) -> dict[str, Any]:
 
 
 LESSON: dict[str, Any] = {
-    "schema_version": 1,
+    "schema_version": 2,
     "title": "Browser test lesson",
     "scope": {"summary": "A lesson with no code.", "files": []},
+    "plan": {
+        "subject": "concept",
+        "time_budget": 15,
+        "content": ["behaviour"],
+        "media": ["prose", "code", "vocab", "single_choice"],
+        "rejected": ["video"],
+        "rationale": [
+            "Two short sections, because the idea has two parts.",
+            "The code line is detail: a reader who knows OrderedDict can skip it.",
+        ],
+        "default_depth": "short",
+    },
+    "probe": [_choice("probe-order", "By last use", "By insertion")],
     "sections": [
         {
             "id": "ordering",
             "title": "Keeping keys in order",
             "body": "The cache remembers the order keys were used in.",
+            "elements": [
+                {"type": "prose", "markdown": "Every read moves the key to the end."},
+                {
+                    "type": "code",
+                    "code": {"language": "python", "text": "cache.move_to_end(key)"},
+                    "depth": "detail",
+                },
+            ],
             "checkpoints": [_choice("cp-ordering", "Use order", "Insert order")],
         },
         {
             "id": "eviction",
             "title": "Dropping the oldest key",
             "body": "When full, the cache forgets the key used longest ago.",
+            "elements": [
+                {
+                    "type": "vocab",
+                    "min_opened": 1,
+                    "terms": [
+                        {
+                            "term": "capacity",
+                            "owner": "ours",
+                            "definition": "How many keys fit.",
+                        }
+                    ],
+                }
+            ],
             "checkpoints": [_choice("cp-eviction", "The oldest", "The newest")],
         },
     ],
