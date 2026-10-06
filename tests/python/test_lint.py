@@ -5,8 +5,18 @@ import json
 from pathlib import Path
 
 import pytest
-from grokcheck.lesson import Lesson, Section, load_lesson
-from grokcheck.lint import intro, item_flaws, prose
+from grokcheck.lesson import (
+    DiagramElement,
+    Element,
+    Lesson,
+    Plan,
+    Section,
+    Subject,
+    Term,
+    VocabElement,
+    load_lesson,
+)
+from grokcheck.lint import intro, item_flaws, media, prose
 
 VALID_FULL = Path(__file__).parent.parent / "fixtures" / "lessons" / "valid_full.json"
 PROJECT = Path(__file__).parent.parent / "fixtures" / "project"
@@ -193,3 +203,116 @@ def test_intro_lint_requires_a_closing_action(tmp_path: Path) -> None:
         pytest.fail(f"declarative intro warns {rules}")
     if action_warnings := intro(lesson_action):
         pytest.fail(f"intro ending in an action warns {action_warnings}")
+
+
+_DIAGRAM = DiagramElement(mermaid="flowchart TD\n  a -->|to| b", caption="Flow.")
+_VOCAB = VocabElement(
+    code=None,
+    terms=(Term(term="capacity", owner="ours", definition="Most items kept."),),
+    min_opened=1,
+)
+
+
+def _plan(
+    subject: Subject,
+    content: tuple[str, ...],
+    rejected: tuple[str, ...],
+    rationale: str = "Fifteen minutes fits one section.",
+) -> Plan:
+    return Plan(
+        subject=subject,
+        time_budget=15,
+        content=content,
+        media=(),
+        rejected=rejected,
+        rationale=(rationale,),
+        default_depth="short",
+    )
+
+
+def _with(lesson: Lesson, *elements: Element, plan: Plan | None = None) -> Lesson:
+    section = dataclasses.replace(lesson.sections[0], elements=elements)
+    return dataclasses.replace(lesson, sections=(section,), plan=plan)
+
+
+def _rules(lesson: Lesson) -> list[tuple[str, str]]:
+    return [(w.rule, w.path) for w in media(lesson)]
+
+
+def test_media_lint_flags_a_section_showing_only_prose_and_code(
+    tmp_path: Path,
+) -> None:
+    """A section with only prose in its short view warns; a diagram there does not.
+
+    A diagram hidden in detail does not count, since the short view never shows it.
+    """
+    base = _lesson(tmp_path, _CLEAN_FINAL)
+    hidden = dataclasses.replace(_DIAGRAM, depth="detail")
+
+    if ("prose_only_section", "sections[0]") not in _rules(_with(base, hidden)):
+        pytest.fail(f"prose-only section warns {media(_with(base, hidden))}")
+    if shown := media(_with(base, _DIAGRAM)):
+        pytest.fail(f"section with a diagram warns {shown}")
+
+
+def test_media_lint_flags_a_diagram_in_detail(tmp_path: Path) -> None:
+    """A detail diagram warns at its authored path, so it moves next to its text."""
+    base = _lesson(tmp_path, _CLEAN_FINAL)
+    hidden = dataclasses.replace(_DIAGRAM, depth="detail")
+
+    rules = _rules(_with(base, _DIAGRAM, hidden))
+
+    if rules != [("diagram_in_detail", "sections[0].elements[1]")]:
+        pytest.fail(f"detail diagram warns {rules}")
+
+
+def test_media_lint_flags_trace_rejected_for_behaviour(tmp_path: Path) -> None:
+    """Rejecting `trace` when the plan covers behaviour warns; a document is exempt.
+
+    Recording runs in a parallel subagent, so time is never a reason to skip it.
+    A document lesson may not hold a trace at all.
+    """
+    base = _lesson(tmp_path, _CLEAN_FINAL)
+    rejected = _with(base, _DIAGRAM, plan=_plan("concept", ("behaviour",), ("trace",)))
+    document = _with(base, _DIAGRAM, plan=_plan("document", ("behaviour",), ("trace",)))
+
+    if _rules(rejected) != [("trace_rejected", "plan.rejected")]:
+        pytest.fail(f"rejected trace warns {media(rejected)}")
+    if "record one" not in media(rejected)[0].message:
+        pytest.fail(f"message does not say to record: {media(rejected)[0].message}")
+    if shown := media(document):
+        pytest.fail(f"document lesson warns {shown}")
+
+
+@pytest.mark.parametrize(
+    ("rationale", "warns"),
+    [
+        ("No trace: the handler needs a live database to run.", False),
+        ("A trace would not fit the time budget.", True),
+        ("A trace would take too long to record.", True),
+    ],
+)
+def test_media_lint_accepts_a_trace_rejection_only_with_a_reason_besides_time(
+    tmp_path: Path, rationale: str, *, warns: bool
+) -> None:
+    """A rationale naming why the code cannot run clears the warning; time does not."""
+    base = _lesson(tmp_path, _CLEAN_FINAL)
+    plan = _plan("concept", ("behaviour",), ("trace",), rationale)
+
+    rules = [rule for rule, _ in _rules(_with(base, _DIAGRAM, plan=plan))]
+
+    if (rules == ["trace_rejected"]) != warns:
+        pytest.fail(f"rationale {rationale!r} warns {rules}")
+
+
+def test_media_lint_flags_an_area_lesson_without_vocab(tmp_path: Path) -> None:
+    """An area lesson needs a vocab element; a concept lesson does not."""
+    base = _lesson(tmp_path, _CLEAN_FINAL)
+    area = _with(base, _DIAGRAM, plan=_plan("area", ("structure",), ()))
+
+    if _rules(area) != [("no_vocab", "$")]:
+        pytest.fail(f"area lesson without vocab warns {media(area)}")
+    if shown := media(_with(base, _VOCAB, plan=_plan("area", ("structure",), ()))):
+        pytest.fail(f"area lesson with vocab warns {shown}")
+    if shown := media(_with(base, _DIAGRAM, plan=_plan("concept", ("structure",), ()))):
+        pytest.fail(f"concept lesson warns {shown}")

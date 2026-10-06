@@ -20,16 +20,17 @@ _EXECUTABLES = {
     "chrome": ("google-chrome", "chromium"),
 }
 _MODULES = ("playwright", "kokoro_onnx", "faster_whisper")
+_SETUP = "run `python3 <grokcheck-media skill dir>/grokcheck_media setup`"
 _INSTALL_HINTS = {
-    "ffmpeg": "install ffmpeg with the system package manager",
+    "ffmpeg": _SETUP,
     "mmdc": "npm install -g @mermaid-js/mermaid-cli",
-    "manim": "pip install manim 'av>=15,<17'",
+    "manim": _SETUP,
     "hyperframes": "npm install -g hyperframes",
     "node": "install Node.js 20 or later",
     "chrome": "install Google Chrome or Chromium",
-    "playwright": "pip install playwright && playwright install chromium",
-    "kokoro_onnx": "pip install kokoro-onnx",
-    "faster_whisper": "pip install faster-whisper 'av>=15,<17'",
+    "playwright": _SETUP,
+    "kokoro_onnx": _SETUP,
+    "faster_whisper": _SETUP,
 }
 
 

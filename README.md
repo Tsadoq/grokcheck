@@ -253,14 +253,23 @@ Everything that needs heavier tools lives in the optional `grokcheck-media` skil
 
 `grokcheck-media` turns a lesson you already ran into media that outlives the browser session. It does not trigger on its own; ask for it by name, for example `/grokcheck-media .grokcheck/lessons/<lesson-id> deck`.
 
+The video tools live in their own Python environment, the media venv, so the core keeps no dependencies. The first time you make a lesson, the agent asks once whether to install them. A yes runs `setup` in the background while the lesson is written, and the lesson's sections get a one-minute narrated video each when setup finishes in time; otherwise the videos come with the next lesson. A no is remembered, and the agent does not ask again unless you ask for video. To install them yourself:
+
+```sh
+python3 skills/grokcheck-media/grokcheck_media setup
+```
+
+It needs [uv](https://docs.astral.sh/uv/) and takes a few minutes and about 2.3 GB of disk: Manim, Kokoro speech, faster-whisper, Playwright Chromium and a static ffmpeg, at pinned versions. Inside Claude Code it installs into the plugin's data folder, `$CLAUDE_PLUGIN_DATA/media/`, which survives plugin updates; from a checkout it uses `~/.cache/grokcheck/`. Running it again only fills what is missing, and after an update that changes the pinned versions it brings the venv up to date. Every media command runs itself under the media venv once it exists, so there is nothing to activate.
+
 | Command | Makes | Needs |
 |---------|-------|-------|
-| `doctor` | A list of which optional tools are installed | nothing |
+| `setup` | The media venv, the Kokoro voice files and the speech recognition model; `setup --decline` records a no | uv |
+| `doctor` | The media venv's state (`ready`, `missing`, `out_of_date` or `declined`) and which optional tools are installed | nothing |
 | `export reveal` | A reveal.js deck, one slide per section, checkpoints as speaker notes, opening offline from disk | nothing (reveal.js is vendored) |
 | `render stepper` | A narrated MP4 of a trace's steps | ffmpeg, Playwright Chromium |
 | `video plan`, `video chapter`, `video join` | A narrated concept video in chapters, each checked against the code it cites and cached, which a lesson can embed as a video element | ffmpeg, Manim or HyperFrames, faster-whisper, Kokoro (or ElevenLabs when you allow cloud speech) |
 
-Run `doctor` first: it maps each tool to its path, or `null` when it is missing. A command whose tool is missing prints what to install and stops; it never installs anything itself.
+Run `doctor` first: it maps each tool to its path, or `null` when it is missing. A command whose tool is missing prints what to install and stops; only `setup` installs anything.
 
 ## Development
 

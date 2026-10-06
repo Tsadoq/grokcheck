@@ -26,14 +26,23 @@ Merge or drop steps that do not fit; a small helper may need only purpose, flow 
 
 ### Media by content
 
-| Content | Medium |
-|---------|--------|
+Every section shows its idea with at least one non-code element in its short view: a diagram, trace, vocab, diff, spike, playground, options, assumptions or video element. Prose and code alone do not count. Pair each one with a checkpoint that asks about it, since viewing alone teaches little.
+
+Draw a flowchart top-down (`flowchart TD`) unless it is a chain of five nodes or fewer: a wide left-to-right graph does not fit the page column, so the reader has to scroll sideways to follow it.
+
+Use every medium that fits the content, not one per content:
+
+| Content or subject | Medium |
+|--------------------|--------|
 | `structure` | a diagram |
 | `behaviour` | a trace stepper with a predict gate |
 | `change` | an annotated diff |
 | `tests` | a mutation quiz or fix-the-bug question |
+| an `area` or `decision` lesson | a vocab element for the names the reader must know |
 
-Pair every diagram, trace and spike with a question; viewing alone teaches little. List a medium you considered and left out in `plan.rejected`.
+Skip the trace for behaviour only when the code cannot run in isolation, and say why in a `plan.rationale` sentence that names the trace. Time is never a reason: traces and spikes are recorded by subagents in parallel with the sections. List every medium you considered and left out in `plan.rejected`.
+
+`validate --strict` fails on a section whose short view holds only prose and code, a diagram marked `detail`, `trace` rejected while `content` holds `behaviour` with no rationale sentence naming the trace, or with time as its only reason (a `document` lesson cannot hold a trace and is exempt), and an `area` or `decision` lesson without a vocab element.
 
 ### Size by time budget
 
@@ -47,7 +56,7 @@ A larger scope is split into several lessons, the most important part first, not
 
 ## Depth
 
-A section's short view is everything without `depth: detail`. Write it for a reader who already knows the area: terse claims, the code, and the problem early. Put what a newcomer needs into `detail` elements: the worked walkthrough, the glossary, a second example, the diagram next to the text. Every checkpoint must be answerable from the short view alone, so an expert who keeps it short is not punished.
+A section's short view is everything without `depth: detail`. Write it for a reader who already knows the area: terse claims, the code, and the problem early. Put what a newcomer needs into `detail` elements: the worked walkthrough, a second example, a longer explanation. Diagrams stay in the short view, next to the text they explain. Every checkpoint must be answerable from the short view alone, so an expert who keeps it short is not punished.
 
 Set `plan.default_depth` to `short` when the lesson has a probe, since a wrong probe answer switches the reader to `detail`, and to `detail` when it has none. Never set the depth from what the reader says about themselves.
 
@@ -168,6 +177,7 @@ Before `validate`, reread the lesson as the reader:
 
 - Could someone who skimmed each section pass its checkpoints? If so, the checkpoints are too easy.
 - Can every checkpoint be answered from the short view?
+- Does every section's short view show its idea with a non-code element?
 - Does every final question need the code's behaviour, not general knowledge?
 - Does every claim a question depends on cite lines, a pinned source or a spike?
 - Does every `pick_line` count lines from the snippet's first line?

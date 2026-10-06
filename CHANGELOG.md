@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-10-06
+
+### Added
+
+- Video in the lesson flow: the first time a lesson is made on a machine, grokcheck asks once whether to install the video tools (about 2.3 GB). After a yes, every section opens with a one-minute narrated chapter. `grokcheck_media setup` installs the tools into the plugin's data folder, which survives updates, and re-syncs them when an update changes the pinned versions.
+- `validate --strict` lint for lessons that lean on code alone: a section whose short view has only prose and code, a diagram marked `detail`, a trace rejected without a reason other than time, and an area or decision lesson without a vocabulary element.
+
+### Changed
+
+- The lesson page follows the design mockup: a header with the depth toggle, a chapter rail with locked and done states, cards, side-by-side panels, dark mode, and the Bricolage Grotesque, Atkinson Hyperlegible and JetBrains Mono fonts, vendored under the SIL Open Font License.
+- Diagrams render at full size and scroll sideways when wide, instead of shrinking to fit the column.
+- Concept video frames show highlighted code, boxes joined by arrows and lists on a light background, instead of one line of text per beat.
+- The authoring guide asks for every medium that fits, keeps diagrams in the short view, and prefers top-down flowcharts. The skill validates with `--strict`.
+
 ## [0.2.0] - 2026-10-06
 
 ### Added

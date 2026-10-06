@@ -106,8 +106,11 @@ function renderVocab(item, context) {
     : "";
   return element("div", { class: "vocab-element" }, [
     legend,
-    element("div", { class: translated ? "terms translated" : "terms" }, rows),
-    element("div", { class: "vocab-side" }, code ? [code, detail] : [detail]),
+    element("div", { class: "panel" }, [
+      element("span", { class: "eyebrow", text: code ? "Vocabulary · click a term to find it in the code" : "Vocabulary · click a term" }),
+      element("div", { class: translated ? "terms translated" : "terms" }, rows),
+    ]),
+    element("div", { class: "vocab-side panel" }, code ? [code, detail] : [detail]),
   ]);
 }
 

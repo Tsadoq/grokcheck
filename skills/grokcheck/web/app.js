@@ -16,6 +16,9 @@ const CONFIDENCE_LEVELS = [
 ];
 
 const stage = document.getElementById("stage");
+const rail = document.getElementById("rail");
+const railItems = [];
+let railButtons = [];
 const replySlots = new Map();
 const repliesReceived = new Map();
 
@@ -108,6 +111,7 @@ function askPanel(section, sectionElement) {
   });
 
   return element("aside", { class: "ask" }, [
+    element("span", { class: "eyebrow", text: "Ask your agent" }),
     element("h3", { text: "Questions about this section" }),
     quote,
     clear,
@@ -140,7 +144,7 @@ function confidencePicker(questionId, onChange) {
   };
 }
 
-function questionCard(question, { final, onAnswered }) {
+function questionCard(question, { final, label, onAnswered }) {
   const status = element("p", { class: "status", "aria-live": "polite" });
   const button = element("button", { type: "button", class: "primary", text: final ? "Save answer" : "Check answer", disabled: true });
   const update = () => {
@@ -162,6 +166,7 @@ function questionCard(question, { final, onAnswered }) {
   const controls = element("fieldset", { class: "answer" }, [answer.element]);
   const feedback = element("div", { class: "feedback" });
   const card = element("article", { class: "question", "data-question": question.id }, [
+    label ? element("span", { class: "eyebrow", text: label }) : "",
     element("div", { class: "prompt", html: renderMarkdown(question.prompt) }),
     question.code && question.type !== "pick_line" ? codeView(question.code) : "",
     controls,
@@ -198,8 +203,10 @@ function questionCard(question, { final, onAnswered }) {
 
 function sectionView(section, index, count, onComplete) {
   const view = element("section", { class: "lesson-section", "data-section": section.id }, [
-    element("p", { class: "progress", text: `Section ${index + 1} of ${count}` }),
-    element("h2", { text: section.title }),
+    element("div", { class: "head" }, [
+      element("p", { class: "eyebrow", text: `Chapter ${index + 1} of ${count}` }),
+      element("h2", { text: section.title }),
+    ]),
   ]);
   const content = element("div", { class: "section-body", html: renderMarkdown(section.body) });
   const gates = (item) => GATING_ELEMENTS.has(item.type) && item.depth !== "detail";
@@ -224,7 +231,7 @@ function sectionView(section, index, count, onComplete) {
   );
   view.append(
     element("h3", { text: "Checkpoint" }),
-    ...section.checkpoints.map((question) => questionCard(question, { final: false, onAnswered: passGate })),
+    ...section.checkpoints.map((question) => questionCard(question, { final: false, label: "Checkpoint", onAnswered: passGate })),
     askPanel(section, view),
   );
   return view;
@@ -244,8 +251,12 @@ function showSection(lesson, index) {
     offerFinal(lesson);
     return;
   }
-  const view = sectionView(lesson.sections[index], index, lesson.sections.length, () => showSection(lesson, index + 1));
+  const view = sectionView(lesson.sections[index], index, lesson.sections.length, () => {
+    railItems[index].done = true;
+    showSection(lesson, index + 1);
+  });
   stage.append(view);
+  renderRail();
   if (index > 0) {
     view.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -256,11 +267,15 @@ function probeStage(lesson, onDone) {
   let anyWrong = false;
   stage.append(
     element("section", { class: "probe" }, [
-      element("h2", { text: "Before you start" }),
-      element("p", { text: "These questions are not scored; they decide how much detail the lesson starts with." }),
+      element("div", { class: "head" }, [
+        element("p", { class: "eyebrow", text: "Probe · not scored" }),
+        element("h2", { text: "Before you start" }),
+        element("p", { class: "note", text: "These questions are not scored; they decide how much detail the lesson starts with." }),
+      ]),
       ...lesson.probe.map((question) =>
         questionCard(question, {
           final: false,
+          label: "Probe",
           onAnswered: (result) => {
             anyWrong ||= result.grade.outcome !== "correct";
             remaining -= 1;
@@ -289,7 +304,13 @@ function depthToggle(initial) {
     });
   }
   show(initial);
-  return { element: element("div", { role: "group", "aria-label": "Lesson depth" }, buttons), show };
+  return {
+    element: element("div", { class: "depth" }, [
+      element("span", { text: "Explanations" }),
+      element("div", { class: "toggle", role: "group", "aria-label": "Lesson depth" }, buttons),
+    ]),
+    show,
+  };
 }
 
 function planDisclosure(plan) {
@@ -302,7 +323,7 @@ function planDisclosure(plan) {
 function offerFinal(lesson) {
   const start = element("button", { type: "button", class: "primary", text: "Start final quiz" });
   const intro = element("section", { class: "final-intro" }, [
-    element("h2", { text: "Final quiz" }),
+    element("div", { class: "head" }, [element("p", { class: "eyebrow", text: "Closed book" }), element("h2", { text: "Final quiz" })]),
     element("p", {
       text: "The final quiz is closed book: the explanation disappears and asking questions is switched off until you submit. You see how you did after submitting.",
     }),
@@ -310,6 +331,7 @@ function offerFinal(lesson) {
   ]);
   start.addEventListener("click", () => startFinal(lesson));
   stage.append(intro);
+  renderRail();
   intro.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -319,10 +341,11 @@ function startFinal(lesson) {
   const submit = element("button", { type: "button", class: "primary", text: "Submit final quiz", disabled: true });
   const status = element("p", { class: "status", "aria-live": "polite" });
   const quiz = element("section", { class: "final-quiz" }, [
-    element("h2", { text: "Final quiz" }),
-    ...lesson.final.map((question) =>
+    element("div", { class: "head" }, [element("p", { class: "eyebrow", text: "Closed book" }), element("h2", { text: "Final quiz" })]),
+    ...lesson.final.map((question, index) =>
       questionCard(question, {
         final: true,
+        label: `Question ${index + 1} of ${lesson.final.length}`,
         onAnswered: () => {
           unanswered -= 1;
           submit.disabled = unanswered > 0;
@@ -336,6 +359,7 @@ function startFinal(lesson) {
     showResults(lesson, await submitQuiz());
   });
   stage.append(quiz);
+  renderRail();
   window.scrollTo({ top: 0 });
 }
 
@@ -353,7 +377,7 @@ function showResults(lesson, results) {
   );
   const { summary } = results;
   const view = element("section", { class: "results" }, [
-    element("h2", { text: "Results" }),
+    element("div", { class: "head" }, [element("p", { class: "eyebrow", text: "Debrief" }), element("h2", { text: "Results" })]),
     element("p", { class: "score", text: `Final quiz score: ${Math.round(summary.final_score * 100)}%` }),
     summary.confident_wrong.length > 0
       ? element("p", { text: `You were sure but not right on ${summary.confident_wrong.length} question(s); your agent will start there.` })
@@ -374,23 +398,93 @@ function showResults(lesson, results) {
     view.append(element("h3", { text: "Your questions" }), element("ul", { class: "threads" }, results.questions.map(threadView)));
   }
   stage.replaceChildren(view);
+  railItems.at(-1).done = true;
+  renderRail();
   window.scrollTo({ top: 0 });
 }
 
 function showHeader(lesson) {
   document.title = `${lesson.title} - grokcheck`;
   document.getElementById("title").textContent = lesson.title;
+  const files = lesson.scope.files;
+  document.getElementById("eyebrow").textContent = [
+    "grokcheck",
+    lesson.plan ? `${lesson.plan.subject} lesson` : "",
+    files.length === 1 ? files[0] : files.length > 1 ? `${files.length} files` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const scope = document.getElementById("scope");
   scope.innerHTML = renderMarkdown(lesson.scope.summary);
   if (lesson.scope.files.length > 0) {
     scope.append(element("ul", { class: "files" }, lesson.scope.files.map((file) => element("li", {}, [element("code", { text: file })]))));
   }
   if (lesson.plan) {
-    document.getElementById("title").after(planDisclosure(lesson.plan));
+    document.getElementById("intro").prepend(planDisclosure(lesson.plan));
   }
 }
 
+function railTarget(index) {
+  const sections = stage.querySelectorAll(".lesson-section");
+  return index < railItems.length - 1 ? sections[index] : stage.querySelector(".final-intro, .final-quiz, .results");
+}
+
+function renderRail() {
+  railButtons = railItems.map((item, index) => {
+    const open = Boolean(railTarget(index));
+    const button = element(
+      "button",
+      { type: "button", class: item.done ? "done" : open ? "" : "locked", disabled: !open },
+      [
+        element("span", { class: "dot", "aria-hidden": "true", text: item.done ? "\u2713" : item.number }),
+        element("span", { class: "rail-label", text: item.label }),
+        item.done ? element("span", { class: "visually-hidden", text: ", done" }) : "",
+        open ? "" : element("span", { class: "lock", text: "locked" }),
+      ],
+    );
+    button.addEventListener("click", () => {
+      const target = railTarget(index);
+      const heading = target?.querySelector("h2");
+      if (!heading) {
+        return;
+      }
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      heading.tabIndex = -1;
+      heading.focus({ preventScroll: true });
+    });
+    return button;
+  });
+  rail.replaceChildren(
+    ...railButtons,
+    element("p", { class: "rail-foot", text: "The next chapter unlocks when you answer this one's checkpoints." }),
+  );
+  markCurrent();
+}
+
+function markCurrent() {
+  let current = -1;
+  railButtons.forEach((button, index) => {
+    const target = railTarget(index);
+    if (target && (current === -1 || target.getBoundingClientRect().top < window.innerHeight / 3)) {
+      current = index;
+    }
+  });
+  railButtons.forEach((button, index) => {
+    if (index === current) {
+      button.setAttribute("aria-current", "step");
+    } else {
+      button.removeAttribute("aria-current");
+    }
+  });
+}
+
 function startLesson(lesson) {
+  railItems.push(
+    ...lesson.sections.map((section, index) => ({ label: section.title, number: String(index + 1), done: false })),
+    { label: "Final quiz", number: "Q", done: false },
+  );
+  renderRail();
+  window.addEventListener("scroll", markCurrent, { passive: true });
   const planned = lesson.plan?.default_depth ?? "detail";
   const remembered = recall("depth");
   const toggle = depthToggle(DEPTHS.some(([value]) => value === remembered) ? remembered : planned);

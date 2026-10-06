@@ -124,6 +124,7 @@ def contact_sheet(video: Path, seconds: float, out: Path) -> Path:
     frames = max(1, math.ceil(seconds / _SHEET_SECONDS))
     rows = math.ceil(frames / _SHEET_COLUMNS)
     tile = f"fps=1/{_SHEET_SECONDS},scale=320:-1,tile={_SHEET_COLUMNS}x{rows}"
+    tile += ":padding=4:color=0xd1d9e0"
     options = ["-vf", tile, "-frames:v", "1", "-update", "1"]
     _run(["ffmpeg", "-y", "-i", str(video), *options, str(out)])
     return out

@@ -72,6 +72,15 @@ _WEB_FILES: dict[str, tuple[str, str]] = {
         "vendor/mermaid/mermaid.tiny.js",
         "text/javascript; charset=utf-8",
     ),
+    **{
+        f"/vendor/fonts/{name}": (f"vendor/fonts/{name}", "font/woff2")
+        for name in (
+            "bricolage-grotesque-latin-wght-normal.woff2",
+            "atkinson-hyperlegible-latin-400-normal.woff2",
+            "atkinson-hyperlegible-latin-700-normal.woff2",
+            "jetbrains-mono-latin-wght-normal.woff2",
+        )
+    },
 }
 
 

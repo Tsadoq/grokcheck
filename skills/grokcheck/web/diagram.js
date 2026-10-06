@@ -64,7 +64,19 @@ async function drawInto(canvas, text) {
   try {
     const mermaid = await ensureMermaid();
     const theme = themeVariables();
-    mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: "base", themeVariables: theme, darkMode: theme.darkMode });
+    const natural = { useMaxWidth: false };
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: "base",
+      themeVariables: { ...theme, fontSize: "16px" },
+      darkMode: theme.darkMode,
+      flowchart: natural,
+      sequence: natural,
+      state: natural,
+      class: natural,
+      er: natural,
+    });
     if (!(await mermaid.parse(text, { suppressErrors: true }))) {
       showSource(canvas, text, "Mermaid could not parse this diagram; its source follows.");
       return;

@@ -2,7 +2,7 @@
 name: grokcheck
 description: Use when a developer wants to understand something and prove to themselves that they do, typically code an agent or a colleague just produced. Takes files, a directory, a commit range, the last change, a library name, a choice between options, a decision already made, or a document, and turns it into an interactive browser lesson whose sections are gated by checkpoint questions, whose claims are checked against the code before serving, and which ends in a closed-book final quiz. Answers the reader's questions live, then re-grades free-text answers, reports where the reader's confidence was miscalibrated, and offers a retake and spaced re-tests of what they missed. Triggers on "explain this code and quiz me", "help me understand what you wrote", "teach me this library", "help me choose between X and Y", "grokcheck", "test my understanding".
 argument-hint: "[files, dir, commit range, 'last change', library, 'X vs Y', question or document]"
-allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/grokcheck *)
+allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/grokcheck *), Bash(python3 ${CLAUDE_SKILL_DIR}/../grokcheck-media/grokcheck_media *)
 compatibility: Requires Python 3.11+ and a local browser
 ---
 
@@ -19,6 +19,29 @@ python3 ${CLAUDE_SKILL_DIR}/grokcheck <command> ... --project <project root>
 ```
 
 That shape is what the `allowed-tools` rule pre-approves. `<project root>` is the absolute path of the project being studied. Every command prints one JSON line. A failure prints `{"ok": false, "error": ...}` and exits with status 1. Give every subagent this section verbatim, with `${CLAUDE_SKILL_DIR}` already expanded.
+
+## Videos
+
+When the video tools are installed, every section opens with a one-minute narrated video. The media commands take the same plain form, from the sibling skill:
+
+```
+python3 ${CLAUDE_SKILL_DIR}/../grokcheck-media/grokcheck_media <command> ...
+```
+
+Before planning a lesson, run `doctor` with that form and act on its `status`:
+
+| `status` | What to do |
+|----------|------------|
+| `ready` | Add videos after step 4. |
+| `missing` | Ask the user once whether to install the video tools: about 2.3 GB and a few minutes, kept in the plugin's data folder, installed in the background while you write the lesson. On yes, run `setup` as a background command (`run_in_background: true`); on no, run `setup --decline`, which records the answer. |
+| `out_of_date` | The user said yes before and an update changed the pinned versions: run `setup` in the background without asking. |
+| `declined` | Do not ask. Run `setup` only when the user asks for video. |
+
+After step 4, when setup has finished and `doctor` says `ready`, add the videos; when it is still running, serve without them and tell the user the next lesson will have them.
+
+1. Fan out in one message, one subagent per section. Brief each with the section's id, its part file, the lines its claims cite, this section and `${CLAUDE_SKILL_DIR}/../grokcheck-media/references/video-script-rules.md`. The subagent writes a one-minute chapter script (`word_budget` 150, `concept_id` the lesson title in lowercase words joined by `-`, `chapter_id` the section id) from the section to `<project root>/.grokcheck/video/<section id>.json`, following the rules. It runs `video chapter <that file> --renderer manim --out-dir <project root>/.grokcheck/video --project <project root>`, reads the `contact_sheet` image, the `transcript_diff` and the `claims` (judging each claim from its evidence alone), fixes the script and runs again until all three are clean. It reports `path`, `captions`, `duration`, the narration as one paragraph, and any claim it could not support.
+2. Put a `video` element first in each section, in the short view (no `depth`): `id` `<section id>-video`, `src` and `captions` from the report, `duration`, and the narration as `transcript`. Drop a chapter whose claims it could not support rather than serve it.
+3. Validate again, then serve.
 
 ## 1. Agree the scope
 
@@ -46,7 +69,7 @@ It prints one JSON line per origin. A source record's `path` is the copy under `
 
 ## 2. Plan the lesson
 
-Read the code in scope, plus the callers and tests that show how it is used. Pick the section plan from "Choosing the shape" in [references/authoring-guide.md](references/authoring-guide.md): the subject sets the section order, the content (structure, behaviour, change, tests) sets the media, and the time budget sets how many sections and questions.
+Read the code in scope, plus the callers and tests that show how it is used. Pick the section plan from "Choosing the shape" in [references/authoring-guide.md](references/authoring-guide.md): the subject sets the section order, the content (structure, behaviour, change, tests) sets the media, and the time budget sets how many sections and questions. Follow the guide's media rules: every section shows its idea with a non-code element in the short view, and behaviour gets a trace stepper. Time is never a reason to reject a medium, since traces and spikes are recorded in parallel in step 3.
 
 Write the `plan` block: subject, time budget, content, the media you will use and the ones you rejected, a rationale the reader sees under "Why this lesson looks like this", and the default depth. Write one or two closed `probe` questions on the prior knowledge the lesson leans on most; a wrong probe answer starts the reader in the detailed view. When `<project root>/.grokcheck/lessons/*/results.json` shows the reader already answered a probe-worthy idea correctly, probe a different one. History only chooses which probes to ask; it never sets the depth or skips the probe.
 
@@ -69,10 +92,10 @@ When subagents are unavailable, do the same jobs yourself, one after another.
 ## 4. Validate and ground
 
 ```
-python3 ${CLAUDE_SKILL_DIR}/grokcheck validate <project root>/.grokcheck/draft.json --project <project root>
+python3 ${CLAUDE_SKILL_DIR}/grokcheck validate <project root>/.grokcheck/draft.json --strict --project <project root>
 ```
 
-On failure the output carries `problems`, each with a JSON `path` and a `message`. Fix every one and validate again until it prints `{"ok": true}`.
+On failure the output carries `problems`, each with a JSON `path` and a `message`. With `--strict` every lint warning is a problem too, the media rules included. Fix every one and validate again until it prints `{"ok": true}`.
 
 Then check every claim against its evidence. Start one fresh-context subagent and give it only these instructions, never the draft, the code or this conversation:
 

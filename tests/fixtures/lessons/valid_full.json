@@ -6,11 +6,11 @@
   "plan": {
     "subject": "area",
     "time_budget": 15,
-    "content": ["structure", "behaviour"],
+    "content": ["structure", "change"],
     "media": ["code", "pick_line"],
-    "rejected": ["trace"],
+    "rejected": ["spike"],
     "rationale": [
-      "A small module read for its behaviour, so code with line questions beats a trace.",
+      "A small module with one change, so code, a diff and line questions fit without a spike.",
       "Fifteen minutes fits three short sections."
     ],
     "default_depth": "short"
@@ -37,6 +37,15 @@
       "title": "What the cache is for",
       "body": "`LruCache` keeps at most `capacity` items and forgets the one used **longest ago**.",
       "code": {"file": "src/cache.py", "lines": [4, 9]},
+      "elements": [
+        {
+          "type": "vocab", "code": {"file": "src/cache.py", "lines": [4, 9]}, "min_opened": 2,
+          "terms": [
+            {"term": "capacity", "owner": "ours", "definition": "The most items the cache keeps.", "lines": [2, 5]},
+            {"term": "OrderedDict", "owner": "stdlib", "definition": "A dict that remembers key order.", "lines": [6]}
+          ]
+        }
+      ],
       "checkpoints": [
         {
           "id": "cp-capacity",
@@ -55,9 +64,9 @@
           "type": "multiple_choice",
           "prompt": "Which methods mark a key as recently used?",
           "options": [
-            {"text": "get", "why": "A hit moves the key to the end."},
-            {"text": "put", "why": "Every write moves the key to the end."},
-            {"text": "__len__", "why": "Counting items does not touch their order."}
+            {"text": "`get`", "why": "A hit moves the key to the end."},
+            {"text": "`put`", "why": "Every write moves the key to the end."},
+            {"text": "`__len__`", "why": "Counting items does not touch their order."}
           ],
           "correct": [0, 1]
         }
@@ -345,7 +354,8 @@
         "Says a read counts as a use",
         "Links the end of the dict to the most recently used position",
         "Links the front of the dict to eviction"
-      ]
+      ],
+      "explanation": "Met: \"A read is a use, so the key moves away from the end that gets evicted.\" Unmet: \"Because `get` should be fast.\""
     }
   ]
 }

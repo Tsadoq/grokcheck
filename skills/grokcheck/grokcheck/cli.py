@@ -31,7 +31,7 @@ from grokcheck.export import render_anki, render_obsidian
 from grokcheck.grading import Outcome
 from grokcheck.ground import VERDICTS, apply_verdicts, manifest
 from grokcheck.lesson import DiagramElement, LessonError, load_lesson
-from grokcheck.lint import intro, item_flaws, prose
+from grokcheck.lint import intro, item_flaws, media, prose
 from grokcheck.mutate import MutationError, plant, remove
 from grokcheck.refresh import report as refresh_report
 from grokcheck.run import DEFAULT_RETAKE, LessonRun, RunError
@@ -386,7 +386,9 @@ def _add_server_options(parser: argparse.ArgumentParser) -> None:
 def _validate(args: argparse.Namespace) -> dict[str, Any]:
     """Load and lint the lesson; `--strict` fails on any warning."""
     lesson = _load(args.lesson, args.project)
-    warnings = [asdict(w) for lint in (item_flaws, prose, intro) for w in lint(lesson)]
+    warnings = [
+        asdict(w) for lint in (item_flaws, prose, intro, media) for w in lint(lesson)
+    ]
     if args.strict and warnings:
         msg = "the lesson has lint warnings"
         raise CliError(msg, problems=warnings)

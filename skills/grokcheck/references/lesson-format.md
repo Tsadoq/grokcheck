@@ -53,7 +53,7 @@ Identifiers start with a letter or digit and hold only letters, digits, `-` and 
 
 ## Elements
 
-Every element has a `type` and an optional `depth`: `short` (the default) or `detail`. A `detail` element holds material a reader who already knows the basics can skip; the page hides it when the reader picks the short view.
+Every element has a `type` and an optional `depth`: `short` (the default) or `detail`. A `detail` element holds material a reader who already knows the basics can skip; the page hides it when the reader picks the short view. The lint wants at least one element other than `prose` and `code` in every section's short view, and never a `diagram` in `detail`; see the media rules in [authoring-guide.md](authoring-guide.md).
 
 | `type` | Fields | Shows |
 |--------|--------|-------|

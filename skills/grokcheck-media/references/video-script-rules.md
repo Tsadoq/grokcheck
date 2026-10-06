@@ -21,7 +21,12 @@ One JSON object per chapter, written from one chapter spec that `video plan` pri
 ```
 
 - `say` is one sentence, spelled as a narrator says it: `task dot cancel`, not `task.cancel()`.
-- `show` is what is on screen while it plays: a short phrase, or code with `"code": true`.
+- `show` is what is on screen while it plays, under the chapter title. Its shape picks the frame:
+  - `"code": true`: syntax-highlighted code, left-aligned. Add `"language": "bash"` (or any Pygments name) when it is not Python.
+  - `a -> b -> c`: boxes joined by arrows, left to right. `c <- b <- a` is drawn left to right too. Up to four boxes; a longer chain becomes a numbered list.
+  - Several lines, `1. a  2. b`, or `a | b`: a list, numbered when every item starts with a number.
+  - Anything else: one short statement, large and centred.
+  Keep it short: about 30 characters a line for a statement, 14 per box, 44 per list item. Longer text wraps and shrinks.
 - `claims` use the lesson claim shape. Every factual sentence carries one, backed by the cited lines the spec lists.
 - The narration must stay within `word_budget` (150 words a minute); `video chapter` refuses a script more than 20% over it.
 

@@ -14,12 +14,15 @@ from statistics import median
 from typing import TYPE_CHECKING
 
 from grokcheck.lesson import (
+    CodeElement,
+    DiagramElement,
     MultipleChoice,
     OpenAnswer,
     PredictOutput,
     PredictState,
     ProseElement,
     SingleChoice,
+    VocabElement,
 )
 
 if TYPE_CHECKING:
@@ -47,6 +50,7 @@ _BANNED = re.compile(
     r"|load-bearing|lean into|it is worth noting|crucially|fundamentally|notably)\b",
     re.IGNORECASE,
 )
+_TIME_REASON = re.compile(r"minute|time|budget|too long|cost|effort", re.IGNORECASE)
 _MAX_SENTENCE_WORDS = 25
 _MAX_INTRO_SENTENCES = 12
 _ACTION_STARTS = frozenset(
@@ -238,6 +242,67 @@ def intro(lesson: Lesson) -> list[LintWarning]:
         for rule, (failed, message) in failures.items()
         if failed
     ]
+
+
+def media(lesson: Lesson) -> list[LintWarning]:
+    """Return a warning for every place `lesson` shows an idea through prose alone."""
+    warnings: list[LintWarning] = []
+    for i, section in enumerate(lesson.sections):
+        short = [e for e in section.elements if e.depth != "detail"]
+        if all(isinstance(e, (ProseElement, CodeElement)) for e in short):
+            warnings.append(
+                LintWarning(
+                    f"sections[{i}]",
+                    "prose_only_section",
+                    "the short view has only prose and code; add a diagram, trace, "
+                    "vocab, diff or other element that shows the idea",
+                )
+            )
+        warnings.extend(
+            LintWarning(
+                f"sections[{i}].elements[{j - section.code_sugar}]",
+                "diagram_in_detail",
+                "move the diagram to the short view, next to the text it explains",
+            )
+            for j, element in enumerate(section.elements)
+            if isinstance(element, DiagramElement) and element.depth == "detail"
+        )
+    plan = lesson.plan
+    if plan is None:
+        return warnings
+    if (
+        plan.subject != "document"
+        and "trace" in plan.rejected
+        and "behaviour" in plan.content
+        and not _trace_explained(plan.rationale)
+    ):
+        warnings.append(
+            LintWarning(
+                "plan.rejected",
+                "trace_rejected",
+                "behaviour needs a trace: record one, or say in the rationale why "
+                "the code cannot run in isolation",
+            )
+        )
+    if plan.subject in {"area", "decision"} and not any(
+        isinstance(e, VocabElement) for s in lesson.sections for e in s.elements
+    ):
+        warnings.append(
+            LintWarning(
+                "$",
+                "no_vocab",
+                f"an {plan.subject} lesson needs a vocab element for its names",
+            )
+        )
+    return warnings
+
+
+def _trace_explained(rationale: tuple[str, ...]) -> bool:
+    """Tell whether a rationale sentence names the trace with a reason besides time."""
+    return any(
+        "trace" in line.casefold() and not _TIME_REASON.search(line)
+        for line in rationale
+    )
 
 
 def _prose_texts(lesson: Lesson) -> Iterator[tuple[str, str]]:

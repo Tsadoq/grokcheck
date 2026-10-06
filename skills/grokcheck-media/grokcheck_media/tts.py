@@ -9,10 +9,13 @@ import os
 import re
 import urllib.request
 import wave
-from pathlib import Path
+from typing import TYPE_CHECKING
 
-_KOKORO_DIR = Path.home() / ".cache" / "grokcheck" / "kokoro"
-_KOKORO_FILES = ("kokoro-v1.0.onnx", "voices-v1.0.bin")
+from grokcheck_media import env
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
 _ELEVENLABS_VOICE = "21m00Tcm4TlvDq8ikWAM"
 _ELEVENLABS_RATE = 22050
 _CLOUD_SECONDS = 60.0
@@ -27,13 +30,13 @@ _SPOKEN = (
 def synthesise(sentence: str, out: Path, *, allow_cloud: bool = False) -> Path | None:
     """Write `sentence` spoken to the WAV file `out` and return it.
 
-    Uses Kokoro when its model files are in `~/.cache/grokcheck/kokoro/`, else
+    Uses Kokoro when its model files are in `env.kokoro_dir()`, else
     ElevenLabs when `allow_cloud` and `ELEVENLABS_API_KEY` are both set.
     Returns None when neither is available.
     """
     text = spoken(sentence)
     if importlib.util.find_spec("kokoro_onnx") and all(
-        (_KOKORO_DIR / name).is_file() for name in _KOKORO_FILES
+        (env.kokoro_dir() / name).is_file() for name in env.KOKORO_FILES
     ):
         _kokoro(text, out)
         return out
@@ -52,8 +55,13 @@ def spoken(sentence: str) -> str:
 
 
 def _kokoro(text: str, out: Path) -> None:
-    kokoro = importlib.import_module("kokoro_onnx").Kokoro(
-        *(str(_KOKORO_DIR / name) for name in _KOKORO_FILES)
+    module = importlib.import_module("kokoro_onnx")
+    data = importlib.import_module("espeakng_loader").get_data_path()
+    if len(data) > env.ESPEAK_MAX_PATH:
+        data = str(env.espeak_copy())
+    kokoro = module.Kokoro(
+        *(str(env.kokoro_dir() / name) for name in env.KOKORO_FILES),
+        espeak_config=module.EspeakConfig(data_path=data),
     )
     samples, rate = kokoro.create(text, voice="af_heart", speed=0.95, lang="en-us")
     pcm = (samples.clip(-1, 1) * 32767).astype("<i2").tobytes()

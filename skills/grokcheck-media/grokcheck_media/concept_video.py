@@ -2,8 +2,9 @@
 
 A chapter script is JSON written by an agent from one `ChapterSpec`:
 `{concept_id, chapter_id, title, word_budget, beats}`, where each beat is
-`{say, show, code?, claims?}`: one narration sentence, the text on screen while
-it plays, whether that text is code, and claims shaped like lesson claims.
+`{say, show, code?, language?, claims?}`: one narration sentence, the text on
+screen while it plays, whether that text is code and in which language
+(Python by default), and claims shaped like lesson claims.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ import json
 import re
 import shutil
 import subprocess
+import textwrap
 import wave
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,33 +35,17 @@ Renderer = Literal["manim", "hyperframes"]
 WORDS_PER_MINUTE = 150
 _OVER_BUDGET = 1.2
 _GAP_SECONDS = 0.45
-_TRANSITION_SECONDS = 0.3
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 _SCRIPT_FIELDS = ("concept_id", "chapter_id", "title", "word_budget", "beats")
 _run = functools.partial(subprocess.run, check=True, capture_output=True)
-_MANIM_SCENE = """\
-import json
-from manim import *
-
-BEATS = json.loads({beats!r})
-
-
-class Chapter(Scene):
-    def construct(self):
-        shown = None
-        for beat in BEATS:
-            font = "DejaVu Sans Mono" if beat["code"] else "DejaVu Sans"
-            text = Text(beat["show"], font=font, font_size=32)
-            if text.width > config.frame_width - 1:
-                text.scale_to_fit_width(config.frame_width - 1)
-            self.add_sound(beat["wav"])
-            if shown is None:
-                self.play(FadeIn(text), run_time={transition})
-            else:
-                self.play(ReplacementTransform(shown, text), run_time={transition})
-            self.wait(beat["seconds"] - {transition})
-            shown = text
-"""
+_MANIM_SCENE = Path(__file__).resolve().parent.parent / "scenes" / "chapter.py"
+_ARROW = re.compile(r"\s*(?:->|→)\s*")
+_BACK_ARROW = re.compile(r"\s*(?:<-|←)\s*")
+_MARKER = re.compile(r"^(?:[-*•]|(\d+)[.)])\s+")
+_INLINE_ITEMS = re.compile(r"\s{2,}(?=\d+[.)]\s)|\s+\|\s+")
+_MAX_NODES = 4
+_WRAP = {"text": 30, "list": 44, "flow": 14}
+_WRAP_LONG_FLOW = 9
 
 
 @dataclass(frozen=True)
@@ -157,18 +143,25 @@ def build_chapter(
 ) -> dict[str, Any]:
     """Render, check and cache one chapter, then copy it to `out_dir/<chapter_id>/`.
 
-    The cache key is what the chapter shows and says and the renderer, so a
-    claim edit or an unchanged chapter is never rendered again. Returns the
-    chapter record plus `claims`, the claim manifest for a fresh-context check.
+    The cache key is what the chapter shows and says, the renderer and the
+    Manim scene file, so a claim edit or an unchanged chapter is never rendered
+    again. Returns the chapter record plus `claims`, the claim manifest for a
+    fresh-context check.
     """
     problems = lint_script(script)
     if problems:
         raise ValueError("; ".join(problems))
     rendered = [
-        {name: beat.get(name) for name in ("say", "show", "code")}
+        {
+            "say": beat["say"],
+            "frame": frame(
+                beat["show"], code=bool(beat.get("code")), language=beat.get("language")
+            ),
+        }
         for beat in script["beats"]
     ]
-    key = json.dumps([script["title"], rendered, renderer])
+    scene = hashlib.sha256(_MANIM_SCENE.read_bytes()).hexdigest()
+    key = json.dumps([script["title"], rendered, renderer, scene])
     sha = hashlib.sha256(key.encode()).hexdigest()[:16]
     cache = VIDEO_CACHE_DIR / script["concept_id"] / script["chapter_id"] / sha
     cached = (cache / "chapter.json").is_file()
@@ -279,7 +272,7 @@ def _render(
         for beat, wav, length in zip(beats, audio, seconds, strict=True)
     ]
     if renderer == "manim":
-        _manim(timed, work, video)
+        _manim(script["title"], timed, work, video)
     else:
         _hyperframes(timed, cues, work, video)
     duration = sum(seconds)
@@ -305,16 +298,77 @@ def _cues(says: Sequence[str], seconds: Sequence[float]) -> list[Cue]:
     return cues
 
 
-def _manim(beats: list[dict[str, Any]], work: Path, video: Path) -> None:
+def frame(show: str, *, code: bool, language: str | None = None) -> dict[str, Any]:
+    """Choose how a beat's `show` is drawn: code, a flow, a list, or text.
+
+    `a -> b -> c` is a flow of boxes (`c <- b <- a` too, turned left to right),
+    or a numbered list past four steps; several lines, `1. a  2. b` or `a | b`
+    is a list; the rest is text.
+    Text is wrapped to fit its kind.
+    """
+    if code:
+        return {"kind": "code", "code": show.strip("\n"), "language": language}
+    text = re.sub(r"\s*\n\s*(->|→)", r" \1", show.strip())
+    text = re.sub(r"(->|→)\s*\n\s*", r"\1 ", text)
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if len(lines) == 1:
+        nodes = _flow_nodes(lines[0])
+        if nodes and len(nodes) > _MAX_NODES:
+            items = [_wrap(node, _WRAP["list"]) for node in nodes]
+            return {"kind": "list", "numbered": True, "items": items}
+        if nodes:
+            width = _WRAP["flow"] if len(nodes) < _MAX_NODES else _WRAP_LONG_FLOW
+            return {"kind": "flow", "nodes": [_wrap(n, width) for n in nodes]}
+        lines = [item for item in _INLINE_ITEMS.split(lines[0]) if item.strip()]
+    if len(lines) == 1:
+        return {"kind": "text", "lines": _wrap(lines[0], _WRAP["text"])}
+    marked = [_MARKER.match(line) for line in lines]
+    return {
+        "kind": "list",
+        "numbered": all(match and match.group(1) for match in marked),
+        "items": [_wrap(_MARKER.sub("", line), _WRAP["list"]) for line in lines],
+    }
+
+
+def _flow_nodes(line: str) -> list[str] | None:
+    forward, backward = _ARROW.split(line), _BACK_ARROW.split(line)
+    if len(forward) > 1 and len(backward) == 1:
+        nodes = forward
+    elif len(backward) > 1 and len(forward) == 1:
+        nodes = backward[::-1]
+    else:
+        return None
+    return nodes if all(nodes) else None
+
+
+def _wrap(text: str, width: int) -> list[str]:
+    lines = textwrap.wrap(
+        " ".join(text.split()),
+        width,
+        break_long_words=False,
+        break_on_hyphens=False,
+    )
+    return lines or [text]
+
+
+def _manim(title: str, beats: list[dict[str, Any]], work: Path, video: Path) -> None:
     scene = work / "scene.py"
-    scene.write_text(
-        _MANIM_SCENE.format(beats=json.dumps(beats), transition=_TRANSITION_SECONDS),
-        encoding="utf-8",
+    shutil.copyfile(_MANIM_SCENE, scene)
+    drawn = [
+        {
+            "frame": frame(b["show"], code=b["code"], language=b.get("language")),
+            "wav": b["wav"],
+            "seconds": b["seconds"],
+        }
+        for b in beats
+    ]
+    (work / "beats.json").write_text(
+        json.dumps({"title": title, "beats": drawn}), encoding="utf-8"
     )
     media = work / "media"
     command = ["manim", "render", "--resolution", "1920,1080", "--frame_rate", "30"]
     command += ["--media_dir", str(media), "-o", "chapter", str(scene), "Chapter"]
-    _run(command)
+    _run(command, cwd=work)
     shutil.move(next(media.rglob("chapter.mp4")), video)
 
 

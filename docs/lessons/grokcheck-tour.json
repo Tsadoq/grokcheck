@@ -20,7 +20,8 @@
       "vocab",
       "diagram",
       "single_choice",
-      "multiple_choice"
+      "multiple_choice",
+      "assumptions"
     ],
     "rejected": [
       "trace",
@@ -31,6 +32,7 @@
       "The subject is three documents, so every claim quotes their ingested copies.",
       "A vocabulary table names the six terms the rest of the tour uses.",
       "One diagram shows how the agent, the server and the page pass events.",
+      "The research findings the design rests on are listed as assumptions, so you rate how sure you are of each before the quiz.",
       "Traces and spikes need code to run, and a video would only repeat the diagram."
     ],
     "default_depth": "detail"
@@ -112,8 +114,8 @@
               "backing": {
                 "file": ".grokcheck/sources/skill.md",
                 "lines": [
-                  79,
-                  79
+                  102,
+                  102
                 ],
                 "quote": "the `evidence` (the cited lines, or a spike's output)"
               },
@@ -124,8 +126,8 @@
               "backing": {
                 "file": ".grokcheck/sources/skill.md",
                 "lines": [
-                  45,
-                  45
+                  68,
+                  68
                 ],
                 "quote": "Author only from the copies, never from memory of the document."
               },
@@ -227,8 +229,8 @@
               "backing": {
                 "file": ".grokcheck/sources/skill.md",
                 "lines": [
-                  89,
-                  95
+                  112,
+                  118
                 ],
                 "quote": "returns while the server keeps running"
               },
@@ -239,8 +241,8 @@
               "backing": {
                 "file": ".grokcheck/sources/skill.md",
                 "lines": [
-                  105,
-                  105
+                  128,
+                  128
                 ],
                 "quote": "It exits with one JSON event, and its exit wakes you."
               },
@@ -251,8 +253,8 @@
               "backing": {
                 "file": ".grokcheck/sources/skill.md",
                 "lines": [
-                  118,
-                  124
+                  141,
+                  147
                 ],
                 "quote": "The reply appears under the reader's question in the page."
               },
@@ -263,8 +265,8 @@
               "backing": {
                 "file": ".grokcheck/sources/skill.md",
                 "lines": [
-                  126,
-                  128
+                  149,
+                  151
                 ],
                 "quote": "The `submitted` event carries `results_path` and a `summary`."
               },
@@ -332,8 +334,8 @@
               "backing": {
                 "file": ".grokcheck/sources/skill.md",
                 "lines": [
-                  79,
-                  79
+                  102,
+                  102
                 ],
                 "quote": "judge only from its `evidence`"
               },
@@ -344,8 +346,8 @@
               "backing": {
                 "file": ".grokcheck/sources/skill.md",
                 "lines": [
-                  79,
-                  79
+                  102,
+                  102
                 ],
                 "quote": "`not_shown` when it shows neither or the evidence is `null`"
               },
@@ -356,8 +358,8 @@
               "backing": {
                 "file": ".grokcheck/sources/skill.md",
                 "lines": [
-                  87,
-                  87
+                  110,
+                  110
                 ],
                 "quote": "Rewrite every `contradicted` claim so it says what the evidence shows"
               },
@@ -401,6 +403,48 @@
             },
             {
               "text": "Execution traces are the only comprehension aid with a controlled positive result, and the finding is marked verified.",
+              "backing": {
+                "file": ".grokcheck/sources/readme-2.md",
+                "lines": [
+                  31,
+                  31
+                ],
+                "quote": "Execution traces are the only comprehension aid with a controlled positive result (Cornelissen 2009: 21% less time, 43% more correct, verified)."
+              },
+              "verified": "supported"
+            }
+          ]
+        },
+        {
+          "type": "assumptions",
+          "id": "s3-assumptions",
+          "items": [
+            {
+              "claim": "The research calls video passive: it gives the feeling of understanding without testing it.",
+              "backing": {
+                "file": ".grokcheck/sources/readme-2.md",
+                "lines": [
+                  83,
+                  83
+                ],
+                "quote": "it is passive and gives the feeling of understanding without testing it."
+              },
+              "verified": "supported"
+            },
+            {
+              "claim": "Retrieval with feedback is the strongest lever the research found, and the finding is marked verified.",
+              "backing": {
+                "file": ".grokcheck/sources/readme-2.md",
+                "lines": [
+                  29,
+                  29
+                ],
+                "quote": "Retrieval with feedback is the strongest lever found (g = 0.499 across 222 classroom studies, verified)."
+              },
+              "verified": "supported"
+            },
+            {
+              "claim": "Execution traces are the only comprehension aid with a controlled positive result, and the finding is marked verified.",
               "backing": {
                 "file": ".grokcheck/sources/readme-2.md",
                 "lines": [

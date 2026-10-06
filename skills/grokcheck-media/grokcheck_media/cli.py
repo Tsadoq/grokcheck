@@ -15,7 +15,7 @@ sys.path.insert(1, str(_SKILL_DIR.parent / "grokcheck"))
 
 from grokcheck.run import LessonRun  # noqa: E402
 
-from grokcheck_media import concept_video, doctor, stepper_video  # noqa: E402
+from grokcheck_media import concept_video, doctor, env, stepper_video  # noqa: E402
 from grokcheck_media.reveal import render_deck  # noqa: E402
 
 if TYPE_CHECKING:
@@ -50,6 +50,9 @@ def _parser() -> _Parser:
     parser = _Parser(prog="grokcheck_media", description=__doc__)
     commands = parser.add_subparsers(required=True, metavar="command")
     commands.add_parser("doctor").set_defaults(command=_doctor)
+    setup = commands.add_parser("setup")
+    setup.add_argument("--decline", action="store_true")
+    setup.set_defaults(command=_setup)
     export = commands.add_parser("export").add_subparsers(
         required=True, metavar="format"
     )
@@ -89,7 +92,20 @@ def _parser() -> _Parser:
 
 
 def _doctor(_: argparse.Namespace) -> dict[str, Any]:
-    return {"ok": True, "tools": doctor.probe()}
+    return {
+        "ok": True,
+        "status": env.status(),
+        "media_dir": str(env.home()),
+        "tools": doctor.probe(),
+    }
+
+
+def _setup(args: argparse.Namespace) -> dict[str, Any]:
+    if args.decline:
+        env.record_answer("no")
+        return {"ok": True, "status": env.status(), "did": []}
+    did = env.setup()
+    return {"ok": True, "status": env.status(), "venv": str(env.venv()), "did": did}
 
 
 def _export_reveal(args: argparse.Namespace) -> dict[str, Any]:
