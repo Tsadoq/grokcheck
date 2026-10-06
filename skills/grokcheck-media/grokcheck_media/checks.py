@@ -134,6 +134,37 @@ def contact_sheet(video: Path, seconds: float, out: Path) -> Path:
     return out
 
 
+def frames(
+    video: Path, out_dir: Path, *, at: Sequence[float] = (), every: float | None = None
+) -> list[dict[str, Any]]:
+    """Write full-size PNG frames of `video` at each of `at`, or every `every` seconds.
+
+    Returns `{at, path}` per frame written.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if every is not None:
+        for stale in out_dir.glob(f"{video.stem}-every-*.png"):
+            stale.unlink()
+        pattern = out_dir / f"{video.stem}-every-%03d.png"
+        _run(["ffmpeg", "-y", "-i", str(video), "-vf", f"fps=1/{every}", str(pattern)])
+        written = sorted(out_dir.glob(f"{video.stem}-every-*.png"))
+        return [
+            {"at": round(number * every, 3), "path": str(path)}
+            for number, path in enumerate(written)
+        ]
+    shots = []
+    for seconds in at:
+        out = out_dir / f"{video.stem}-{seconds:07.2f}s.png"
+        out.unlink(missing_ok=True)
+        command = ["ffmpeg", "-y", "-ss", f"{seconds:.3f}", "-i", str(video)]
+        _run([*command, "-frames:v", "1", "-update", "1", str(out)])
+        if not out.is_file():
+            msg = f"{video} has no frame at {seconds} seconds"
+            raise ValueError(msg)
+        shots.append({"at": seconds, "path": str(out)})
+    return shots
+
+
 def claim_manifest(script: dict[str, Any], project_root: Path) -> list[dict[str, Any]]:
     """Return `grokcheck ground`'s manifest entries for every claim in the script.
 

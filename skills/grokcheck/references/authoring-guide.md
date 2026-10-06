@@ -35,12 +35,12 @@ Use every medium that fits the content, not one per content:
 | Content or subject | Medium |
 |--------------------|--------|
 | `structure` | a diagram, or a `blocks` or `table` view |
-| `behaviour` | a view over recorded runs, a steps view or a trace stepper, with a predict gate |
+| `behaviour` | a view over a recorded dataset (preferred), a steps view or a trace stepper, with a predict gate |
 | `change` | an annotated diff |
 | `tests` | a mutation quiz or fix-the-bug question |
 | an `area` or `decision` lesson | a vocab element, or a short `blocks` or `table` view, in the first section for the names the reader must know |
 
-Skip the trace for behaviour only when the code cannot run in isolation, and say why in a `plan.rationale` sentence that names the trace. Time is never a reason: traces and spikes are recorded by subagents in parallel with the sections. List every medium you considered and left out in `plan.rejected`.
+Leave the trace out for behaviour only when a view over a recorded dataset already shows the path, or when the code cannot run in isolation, and say which in a `plan.rationale` sentence that names the trace. Time is never a reason: traces and spikes are recorded by subagents in parallel with the sections. List every medium you considered and left out in `plan.rejected`.
 
 `validate --strict` fails on a section whose short view holds only prose and code, a diagram marked `detail`, `trace` rejected while `content` holds `behaviour` with no rationale sentence naming the trace, or with time as its only reason (a `document` lesson cannot hold a trace and is exempt), any other medium rejected only for time, and an `area` or `decision` lesson whose first section has no vocab element and no short `blocks` or `table` view. The view rules are listed under [Views](#views).
 
@@ -49,7 +49,7 @@ Skip the trace for behaviour only when the code cannot run in isolation, and say
 | Budget | Lesson |
 |--------|--------|
 | 5 minutes | One section holding the diff or the trace with a two-sentence body, and a final of 3 hard questions. |
-| 15 minutes | Two or three sections, a final of 4 to 6 questions. |
+| 15 minutes | Two or three sections, a final of 4 to 6 questions. An `options` or `decision` lesson fits its decision questions in by the rules under [Decision questions](#decision-questions). |
 | 30 minutes | Three to six sections, a final of 6 to 10 questions. |
 
 A larger scope is split into several lessons, the most important part first, not squeezed into one.
@@ -125,7 +125,7 @@ Each section ends in two checkpoints, which gate the next section and reveal the
 - one **Understand** question: can the reader restate what the section just said (what does X do, which of these is true);
 - one **Apply** question: can the reader use it on a case the section did not spell out (what happens for this input, which line handles this).
 
-A checkpoint probes only its own section. It must be answerable from the section without guessing, and it must not be answerable from the prompt alone. Prefer closed types here (`single_choice`, `multiple_choice`, `pick_line`, choice-mode `predict_output`): instant feedback is what makes the gate worth passing.
+A checkpoint probes only its own section. It must be answerable from the section without guessing, and it must not be answerable from the prompt alone. An Apply gate asks about a case the section's body and video do not state: a video that narrates the very input the gate asks about turns the gate into recall. `validate --strict` fails with `gate_given_away` when a gate's correct option text, or every `field` and value of a `select_items` view's `where` (as `drop=2` or `drop: 2`), appears in the section's body or video `transcript`. Prefer closed types here (`single_choice`, `multiple_choice`, `pick_line`, choice-mode `predict_output`): instant feedback is what makes the gate worth passing.
 
 ## Final quiz
 
@@ -176,12 +176,21 @@ For every rubric, write one met and one unmet example answer and put both in the
 
 ## Decision questions
 
-An `options` or `decision` lesson asks these, each as an `open_answer` with a rubric:
+An `options` or `decision` lesson covers four decision questions:
 
 - Pre-mortem: "It was reverted six months later: why?"
 - The strongest argument against the leading option.
 - The outside view: how choices like this one usually turn out elsewhere.
 - Teach-back: explain the choice and its main risk to a colleague who missed the discussion.
+
+They do not add four items to the final:
+
+- The teach-back is the final's explain-in-plain-English item, an `open_answer` about the choice instead of the code.
+- The pre-mortem and the strongest argument against become rubric items of that teach-back ("Names a likely cause of reversal", "States the strongest argument against"), next to the choice and its main risk.
+- The outside view is a checkpoint, an `open_answer` with a rubric or a closed question, in the section that covers the alternatives.
+- The why-question asks why the chosen option beat the runner-up.
+
+A 15-minute decision lesson then has a final of 4 to 6: the teach-back, the why-question and the wrong-artefact item, plus the transfer and wrong-data items when it has datasets, and one Apply item when there is room.
 
 Every claim an option makes carries a backing: a cited line, a source, a spike, or an `unverified` reason the reader sees. Put the reader's own list first with an `options` element left `reader_first`, and the assumptions in an `assumptions` element, each checked by a spike where one can run.
 

@@ -30,7 +30,7 @@ from grokcheck.diffs import as_json, hunks
 from grokcheck.export import render_anki, render_obsidian
 from grokcheck.export_html import render_html
 from grokcheck.grading import Outcome
-from grokcheck.ground import VERDICTS, apply_verdicts, manifest
+from grokcheck.ground import VERDICTS, apply_verdicts, manifest, unsettled
 from grokcheck.lesson import DiagramElement, LessonError, load_lesson
 from grokcheck.lint import intro, item_flaws, media, prose
 from grokcheck.mutate import MutationError, plant, remove
@@ -113,6 +113,7 @@ def _parser() -> _Parser:  # noqa: PLR0915
     ground = commands.add_parser("ground", help="list claims or record verdicts")
     ground.add_argument("lesson", type=Path)
     ground.add_argument("--verdicts", type=Path)
+    ground.add_argument("--all", action="store_true")
     _add_project(ground)
     ground.set_defaults(command=_ground)
 
@@ -503,14 +504,18 @@ def _validate(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _ground(args: argparse.Namespace) -> dict[str, Any]:
-    """Print the claim manifest, or apply `--verdicts` and count them by result.
+    """Print the claims still to judge, or apply `--verdicts` and count them.
 
-    `notes` keeps every non-empty verdict note, since the lesson has no place
-    for one.
+    The manifest leaves out claims whose verdict still matches their hash,
+    unless `--all`. `notes` keeps every non-empty verdict note, since the
+    lesson has no place for one.
     """
     if args.verdicts is None:
         lesson = _load(args.lesson, args.project)
-        return {"ok": True, "manifest": manifest(lesson, args.project)}
+        entries = manifest(lesson, args.project)
+        if not args.all:
+            entries = unsettled(entries, args.lesson, args.project)
+        return {"ok": True, "manifest": entries}
     try:
         verdicts: list[dict[str, Any]] = json.loads(args.verdicts.read_text("utf-8"))
     except json.JSONDecodeError as error:

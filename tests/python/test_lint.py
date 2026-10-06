@@ -16,6 +16,7 @@ from grokcheck.lesson import (
     Section,
     Subject,
     Term,
+    VideoElement,
     ViewElement,
     VocabElement,
     load_lesson,
@@ -148,6 +149,22 @@ def test_prose_lint_flags_a_sentence_over_25_words(tmp_path: Path) -> None:
         pytest.fail(f"message does not quote the sentence: {warnings[0].message}")
     if fixture_warnings := prose(load_lesson(VALID_FULL, PROJECT)):
         pytest.fail(f"fixture lesson warns {fixture_warnings}")
+
+
+def test_a_closing_quote_after_punctuation_ends_a_sentence(tmp_path: Path) -> None:
+    """Quoted examples ending in `."`, `?"` or a typographic quote split there."""
+    base = _lesson(tmp_path, _CLEAN_FINAL)
+    body = (
+        'Met: "The cache drops the oldest key when it is full." '
+        "Unmet: \u201cIt removes keys whenever it wants to free some memory?\u201d "
+        'Also unmet: "It never drops anything at all, so it just grows!" '
+        "Each example stays short on its own."
+    )
+    section = dataclasses.replace(base.sections[0], body=body)
+    lesson = dataclasses.replace(base, sections=(section,))
+
+    if warnings := prose(lesson):
+        pytest.fail(f"quoted examples warn {warnings}")
 
 
 def test_prose_lint_flags_banned_words_case_insensitively(tmp_path: Path) -> None:
@@ -484,3 +501,23 @@ def test_each_view_lint_rule_fires_at_its_path(
 
     if rules != [(rule, path)]:
         pytest.fail(f"expected only {(rule, path)}, got {rules}")
+
+
+def test_a_gate_answer_stated_in_the_section_video_warns(tmp_path: Path) -> None:
+    """A video that says the gate's correct option gives the gate away."""
+    base = _lesson(tmp_path, _CLEAN_FINAL)
+    video = VideoElement(
+        id="purpose-video",
+        src="/v.mp4",
+        captions="/v.vtt",
+        duration=60.0,
+        transcript="A cache built with capacity two holds two items, no more.",
+    )
+    section = dataclasses.replace(base.sections[0], elements=(video,))
+    lesson = dataclasses.replace(base, sections=(section,))
+
+    given = [w.path for w in media(lesson) if w.rule == "gate_given_away"]
+    if given != ["sections[0].checkpoints[0]"]:
+        pytest.fail(f"gate_given_away at {given}")
+    if any(w.rule == "gate_given_away" for w in media(base)):
+        pytest.fail("the lesson without the video warns")

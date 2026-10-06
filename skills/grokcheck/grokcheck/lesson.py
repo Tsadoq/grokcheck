@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import (
     TYPE_CHECKING,
+    Any,
     ClassVar,
     Generic,
     Literal,
@@ -1116,7 +1117,7 @@ class Section:
 Subject = Literal[
     "change", "area", "concept", "library", "options", "decision", "document"
 ]
-_SUBJECTS: tuple[Subject, ...] = get_args(Subject)
+SUBJECTS: tuple[Subject, ...] = get_args(Subject)
 _TIME_BUDGETS = (5, 15, 30)
 _CONTENT = ("structure", "behaviour", "change", "tests")
 _CODE_ONLY = frozenset(
@@ -1339,9 +1340,38 @@ def load_lesson(path: Path, project_root: Path) -> Lesson:
         raise LessonError([Problem("$", f"not valid JSON: {exc}")]) from exc
     checker = _Checker(project_root.resolve(), path.parent.resolve())
     lesson = _lesson(checker, raw)
+    if not checker.problems and _drop_stale_verdicts(checker, lesson, raw):
+        checker = _Checker(project_root.resolve(), path.parent.resolve())
+        lesson = _lesson(checker, raw)
     if checker.problems:
         raise LessonError(checker.problems)
     return lesson
+
+
+def _drop_stale_verdicts(
+    checker: _Checker, lesson: Lesson, raw: dict[str, Any]
+) -> bool:
+    """Drop each verdict whose `verified_hash` no longer matches; report the rest.
+
+    A verdict with no hash is kept as written. Returns whether one was dropped.
+    """
+    from grokcheck.ground import claim_at, claim_hash, manifest_entry  # noqa: PLC0415
+
+    dropped = False
+    for claim_id, claim in lesson.claims():
+        holder = claim_at(raw, claim_id)
+        if holder is None or "verified_hash" not in holder:
+            continue
+        entry = manifest_entry(claim_id, claim, checker.project_root, lesson)
+        if holder["verified_hash"] != claim_hash(entry):
+            holder.pop("verified", None)
+            del holder["verified_hash"]
+            dropped = True
+        elif claim.verified == "contradicted":
+            checker.report(
+                _at(claim_id, "verified"), "a contradicted claim cannot be served"
+            )
+    return dropped
 
 
 def _view_claims(view: ViewElement) -> Iterator[tuple[ClaimKind, int, Claim]]:
@@ -1611,8 +1641,8 @@ def _plan(checker: _Checker, value: object, sections: tuple[Section, ...]) -> Pl
         ),
     )
     subject = obj.get("subject", "change")
-    if subject not in _SUBJECTS:
-        checker.report(_at(path, "subject"), f"must be one of {', '.join(_SUBJECTS)}")
+    if subject not in SUBJECTS:
+        checker.report(_at(path, "subject"), f"must be one of {', '.join(SUBJECTS)}")
     budget = obj.get("time_budget", 30)
     if isinstance(budget, bool) or budget not in _TIME_BUDGETS:
         checker.report(_at(path, "time_budget"), "must be 5, 15 or 30")
@@ -2024,7 +2054,10 @@ def _claims(checker: _Checker, obj: dict[str, object], path: str) -> tuple[Claim
     for index, item in enumerate(checker.array(obj, "claims", path)):
         claim_path = _index(where, index)
         fields = checker.fields(
-            item, claim_path, frozenset({"text", "backing"}), frozenset({"verified"})
+            item,
+            claim_path,
+            frozenset({"text", "backing"}),
+            frozenset({"verified", "verified_hash"}),
         )
         text = checker.text(fields, "text", claim_path)
         verified = _verdict(checker, fields, claim_path, "claim")
@@ -2048,7 +2081,7 @@ def _verdict(
 ) -> Verdict:
     """Return the `verified` field of `fields`, reporting a contradicted or bad one."""
     verified = fields.get("verified", "unchecked")
-    if verified == "contradicted":
+    if verified == "contradicted" and "verified_hash" not in fields:
         checker.report(_at(path, "verified"), f"a contradicted {noun} cannot be served")
     elif verified not in _VERDICTS:
         checker.report(_at(path, "verified"), f"must be one of {', '.join(_VERDICTS)}")
@@ -3038,7 +3071,7 @@ def _assumptions(
             item,
             where,
             frozenset({"claim", "backing"}),
-            frozenset({"checked_by_spike", "verified"}),
+            frozenset({"checked_by_spike", "verified", "verified_hash"}),
         )
         verified = _verdict(checker, fields, where, "assumption")
         spike_id = checker.identifier(fields, "checked_by_spike", where) or None

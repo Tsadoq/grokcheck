@@ -15,7 +15,13 @@ sys.path.insert(1, str(_SKILL_DIR.parent / "grokcheck"))
 
 from grokcheck.run import LessonRun  # noqa: E402
 
-from grokcheck_media import concept_video, doctor, env, stepper_video  # noqa: E402
+from grokcheck_media import (  # noqa: E402
+    checks,
+    concept_video,
+    doctor,
+    env,
+    stepper_video,
+)
 from grokcheck_media.reveal import render_deck  # noqa: E402
 
 if TYPE_CHECKING:
@@ -83,7 +89,15 @@ def _parser() -> _Parser:
     chapter.add_argument("--out-dir", type=Path, required=True)
     chapter.add_argument("--project", type=Path, default=Path.cwd())
     chapter.add_argument("--allow-cloud", action="store_true")
+    chapter.add_argument("--avoid", action="append", default=[])
     chapter.set_defaults(command=_video_chapter)
+    frames = video.add_parser("frames")
+    frames.add_argument("video", type=Path)
+    when = frames.add_mutually_exclusive_group(required=True)
+    when.add_argument("--at", type=float, nargs="+")
+    when.add_argument("--every", type=float)
+    frames.add_argument("--out-dir", type=Path, required=True)
+    frames.set_defaults(command=_video_frames)
     join = video.add_parser("join")
     join.add_argument("out_dir", type=Path)
     join.add_argument("--out", type=Path, required=True)
@@ -171,8 +185,23 @@ def _video_chapter(args: argparse.Namespace) -> dict[str, Any]:
         args.out_dir,
         project_root=args.project,
         allow_cloud=args.allow_cloud,
+        avoid=args.avoid,
     )
     return {"ok": True, **chapter}
+
+
+def _video_frames(args: argparse.Namespace) -> dict[str, Any]:
+    if any(seconds < 0 for seconds in args.at or ()) or (
+        args.every is not None and args.every <= 0
+    ):
+        msg = "--at needs seconds of 0 or more, --every a positive number of seconds"
+        raise CliError(msg)
+    if not args.video.is_file():
+        msg = f"{args.video} is not a file"
+        raise CliError(msg)
+    doctor.require(["ffmpeg"])
+    shots = checks.frames(args.video, args.out_dir, at=args.at or (), every=args.every)
+    return {"ok": True, "frames": shots}
 
 
 def _video_join(args: argparse.Namespace) -> dict[str, Any]:

@@ -520,7 +520,7 @@ def _notes(
         checker.array(obj, "notes", path),
         _at(path, "notes"),
         {"where", "text"},
-        {"verified"},
+        {"verified", "verified_hash"},
     ):
         found.append(
             ViewNote(
@@ -544,7 +544,7 @@ def _nodes(
         checker.array(obj, "nodes", path, 1),
         _at(path, "nodes"),
         {"id", "label", "kind", "code", "note"},
-        {"yes", "tone", "example", "verified"},
+        {"yes", "tone", "example", "verified", "verified_hash"},
     ):
         ident = checker.identifier(spec, "id", at)
         if ident in {node.id for node in found}:
@@ -680,7 +680,7 @@ def _inline_steps(
         checker.array(obj, "steps", path, 1),
         _at(path, "steps"),
         {"code", "note"},
-        {"link", "verified"},
+        {"link", "verified", "verified_hash"},
     ):
         from grokcheck.lesson import _verdict  # noqa: PLC0415
 

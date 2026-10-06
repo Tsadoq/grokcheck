@@ -77,10 +77,10 @@ Needs ffmpeg, Manim or HyperFrames, faster-whisper, and Kokoro (or ElevenLabs wi
 
    Use `<project root>/.grokcheck/video/` as `<out dir>` below: a `video` element may point into the directory of the lesson file it sits in, which for `.grokcheck/draft.json` is `.grokcheck/`, or into the cache.
 
-2. For each chapter, launch one subagent with its spec, the `concept_id`, the lesson's sections it covers and `references/video-script-rules.md`. The subagent:
+2. For each chapter, launch one subagent with its spec, the `concept_id`, the lesson's sections it covers, their gate and checkpoint questions with the answers, and `references/video-script-rules.md`. Pass each gate's correct answer as `--avoid`. The subagent:
    - reads the sections and the cited lines, and writes the script JSON the rules describe to `<out dir>/<chapter id>.json`;
-   - runs `python3 ${CLAUDE_SKILL_DIR}/grokcheck_media video chapter <out dir>/<chapter id>.json --renderer manim|hyperframes --out-dir <out dir> --project <project root> [--allow-cloud]`;
-   - reads the contact sheet image, the `transcript_diff` and the `claims` manifest it prints, judging every claim against its evidence alone, and fixes the script and re-runs until all three are clean;
+   - runs `python3 ${CLAUDE_SKILL_DIR}/grokcheck_media video chapter <out dir>/<chapter id>.json --renderer manim|hyperframes --out-dir <out dir> --project <project root> [--avoid <text>]... [--allow-cloud]`; each `--avoid` is an answer the chapter must not give away, and a script that says or shows one is refused;
+   - reads the contact sheet image, full-size frames of the busiest beats, the `transcript_diff` and the `claims` manifest it prints, judging every claim against its evidence alone, and fixes the script and re-runs until all are clean. Frames come from `python3 ${CLAUDE_SKILL_DIR}/grokcheck_media video frames <video> --at <seconds>... --out-dir <dir>` (or `--every <seconds>`), which writes full-size PNGs and prints `frames`, each `{at, path}`;
    - reports the chapter's path and any claim it could not support.
 
 3. A chapter whose claim check fails is re-scripted alone; the other chapters stay cached.

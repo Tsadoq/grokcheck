@@ -8,6 +8,7 @@ what the Manim scene animates, beat by beat.
 
 from __future__ import annotations
 
+import math
 import re
 import textwrap
 from itertools import pairwise
@@ -18,6 +19,8 @@ from grokcheck import diagrams
 KINDS = ("flow", "sequence", "state")
 CHANGES = ("add", "focus", "move", "branch")
 MAX_CODE_LINES = 5
+MAX_CODE_WIDTH = 80
+MAX_BANDS = 3
 MAX_UNSCENED_BEATS = 3
 MAX_NODES = diagrams.MAX_NODES
 LABEL_WIDTH = 18
@@ -131,6 +134,17 @@ def check_script(
         for index in codes
         if (lines := len(str(beats[index].get("show", "")).strip("\n").splitlines()))
         > MAX_CODE_LINES
+    ]
+    problems += [
+        f"beats[{index}] has a code line of {width} characters;"
+        f" keep it to {MAX_CODE_WIDTH} so the code stays readable"
+        for index in codes
+        if (
+            width := max(
+                map(len, str(beats[index].get("show", "")).splitlines()), default=0
+            )
+        )
+        > MAX_CODE_WIDTH
     ]
     if scene is None:
         if len(beats) > MAX_UNSCENED_BEATS:
@@ -373,6 +387,35 @@ def layout(scene: dict[str, Any]) -> dict[str, Any]:
         for ident in ids
     }
     return {"positions": positions, "back": sorted(back)}
+
+
+def wraps(scene: dict[str, Any], laid: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return `laid` folded into 1 to `MAX_BANDS` bands, each `{positions, bands}`.
+
+    A state's items and an LR flow's layers fold into rows, a TD flow's layers
+    into columns; `bands` maps each id to its band. A sequence does not fold.
+    """
+    if scene["kind"] == "sequence":
+        return []
+    positions = laid["positions"]
+    axis = 1 if scene["kind"] == "flow" and scene["direction"] == "TD" else 0
+    layers = int(max(p[axis] for p in positions.values())) + 1
+    folds = []
+    for per in dict.fromkeys(math.ceil(layers / b) for b in range(1, MAX_BANDS + 1)):
+        band = {i: int(p[axis] // per) for i, p in positions.items()}
+        offset, start = {}, 0.0
+        for number in range(max(band.values()) + 1):
+            across = [p[1 - axis] for i, p in positions.items() if band[i] == number]
+            offset[number] = start - min(across)
+            start += max(across) - min(across) + (1 if scene["kind"] == "state" else 2)
+        folded = {}
+        for ident, p in positions.items():
+            spot = [0.0, 0.0]
+            spot[axis] = p[axis] - band[ident] * per
+            spot[1 - axis] = p[1 - axis] + offset[band[ident]]
+            folded[ident] = spot
+        folds.append({"positions": folded, "bands": band})
+    return folds
 
 
 def caption(show: str | None) -> list[str]:

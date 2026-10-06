@@ -55,7 +55,7 @@ Every field is required.
 | `content` | Which of `structure`, `behaviour`, `change`, `tests` the lesson covers, no repeats. |
 | `media` | Element or question types the lesson uses. Each must appear in some section's elements or checkpoints. |
 | `rejected` | Element or question types considered and left out. |
-| `rationale` | At least one sentence, shown to the reader under "Why this lesson looks like this". |
+| `rationale` | An array of one or more sentences, one string each, shown to the reader under "Why this lesson looks like this". |
 | `default_depth` | `short` or `detail`: the starting view when no probe answer is wrong. |
 
 ## Probe
@@ -646,7 +646,7 @@ The view must be a `table` with `fill`, and in a section this question is its `g
 
 ### Questions on an inline view
 
-In `final` and `probe`, `select_items` and `fill_table` carry their view inline: the view object without `id`, `gate`, `inputs`, `notes`, `claims` and `depth`. Its `where` selects one scenario. With `mask` it stays masked for good, since final questions never reveal before submit. Inline views may draw held-out rows and `wrong` datasets, which sections may not. A transfer item is a final question whose inline view shows only held-out rows; a wrong-data item is a final `select_items` over a `wrong` dataset, usually with `"answer": {"_edited": true}` and the prompt "One item is wrong. Which?".
+In `final` and `probe`, `select_items` and `fill_table` carry their view inline: the view object with `"type": "view"` and without `id`, `gate`, `inputs`, `notes`, `claims` and `depth`. Its `where` selects one scenario. With `mask` it stays masked for good, since final questions never reveal before submit. Inline views may draw held-out rows and `wrong` datasets, which sections may not. A transfer item is a final question whose inline view shows only held-out rows; a wrong-data item is a final `select_items` over a `wrong` dataset, usually with `"answer": {"_edited": true}` and the prompt "One item is wrong. Which?".
 
 ## Outcomes
 

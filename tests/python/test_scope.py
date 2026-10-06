@@ -68,6 +68,36 @@ def test_infer_subject_from_input_shape(tmp_path: Path) -> None:
         pytest.fail(f"comparison: {comparison}")
 
 
+def test_a_revision_anywhere_and_a_leading_subject_word_are_used(
+    tmp_path: Path,
+) -> None:
+    """A range after other words still lists its files; a subject word sets it."""
+    (tmp_path / "core.py").write_text("x = 1\n", encoding="utf-8")
+    _git(tmp_path, "init", "--quiet")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "--quiet", "-m", "first")
+    first = subprocess.run(  # noqa: S603
+        ["git", "-C", str(tmp_path), "rev-parse", "--short=11", "HEAD"],  # noqa: S607
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    ).stdout.strip()
+    (tmp_path / "core.py").write_text("x = 2\n", encoding="utf-8")
+    _git(tmp_path, "commit", "--quiet", "-am", "second")
+
+    decision = infer([f"decision {first}..HEAD"], tmp_path)
+    question = infer(["what", "changed", "in", f"{first}..HEAD"], tmp_path)
+    prose = infer(["why", "does", "HEAD", "move"], tmp_path)
+
+    if (decision.subject, decision.files) != ("decision", ("core.py",)):
+        pytest.fail(f"decision: {decision}")
+    if (question.subject, question.files) != ("change", ("core.py",)):
+        pytest.fail(f"question: {question}")
+    if prose.subject != "concept":
+        pytest.fail(f"prose: {prose}")
+
+
 def test_document_inputs_infer_document_subject_and_forbid_code_media(
     tmp_path: Path,
 ) -> None:

@@ -265,3 +265,66 @@ def test_timing_fits_inside_the_beat(seconds: float, adds: int, moves: int) -> N
         pytest.fail("phases['add'] <= seconds * 0.4")
     if not (min(phases.values()) >= 0):
         pytest.fail("min(phases.values()) >= 0")
+
+
+def test_wraps_fold_long_states_and_flows_into_bands() -> None:
+    """States and LR flows fold into rows, TD flows into columns."""
+    items = [{"id": f"e{n}", "label": str(n)} for n in range(1, 11)]
+    state = scene.normalise({"kind": "state", "items": items})
+    folds = scene.wraps(state, scene.layout(state))
+    _same(len(folds), 3)
+    _same(folds[1]["positions"]["e5"], [4, 0.0])
+    _same(folds[1]["positions"]["e6"], [0, 1.0])
+    _same(folds[1]["bands"]["e6"], 1)
+    chain = "A --> B\n  B --> C\n  C --> D"
+    lr = scene.normalise({"kind": "flow", "mermaid": f"flowchart LR\n  {chain}"})
+    _same(
+        scene.wraps(lr, scene.layout(lr))[1]["positions"],
+        {"A": [0, 0.0], "B": [1, 0.0], "C": [0, 2.0], "D": [1, 2.0]},
+    )
+    td = scene.normalise({"kind": "flow", "mermaid": f"flowchart TD\n  {chain}"})
+    _same(
+        scene.wraps(td, scene.layout(td))[1]["positions"],
+        {"A": [0.0, 0], "B": [0.0, 1], "C": [2.0, 0], "D": [2.0, 1]},
+    )
+    seq = scene.normalise({"kind": "sequence", "actors": [{"id": "a"}], "messages": []})
+    _same(scene.wraps(seq, scene.layout(seq)), [])
+
+
+def test_lint_refuses_a_code_line_too_wide_to_read() -> None:
+    """A code line over 80 characters would shrink the band's text."""
+    beats = [{"say": "It reads.", "add": ["H"], "show": "x" * 81, "code": True}]
+    problems = lint_script(
+        _script(scene={"kind": "flow", "mermaid": DECISION}, beats=beats)
+    )
+    if not any("code line of 81 characters" in p for p in problems):
+        pytest.fail(str(problems))
+
+
+@pytest.mark.parametrize(
+    ("beat", "where"),
+    [
+        ({"say": "It answers with a 204, no content.", "add": ["H"]}, "beats[0].say"),
+        ({"say": "It answers.", "add": ["H"], "show": "status 204"}, "beats[0].show"),
+        ({"say": "It answers.", "add": ["R->C"]}, "the scene"),
+    ],
+)
+def test_lint_refuses_a_script_that_gives_an_answer_away(
+    beat: dict[str, Any], where: str
+) -> None:
+    """Narration, captions and scene labels may not hold an avoided answer."""
+    script = _script(
+        scene={"kind": "flow", "mermaid": DECISION.replace("C[409]", "C[204]")},
+        beats=[beat],
+    )
+    problems = lint_script(script, ["204"])
+    if not any(p.startswith(f"{where} gives away '204'") for p in problems):
+        pytest.fail(str(problems))
+
+
+def test_lint_matches_avoided_text_as_whole_words_in_any_case() -> None:
+    """`7` does not match `17`; `Replay  To` matches `replay to`."""
+    beats = [{"say": "Seventeen is 17, and it will replay to the end.", "show": "a"}]
+    problems = lint_script(_script(beats=beats), ["7", "Replay  To"])
+    given = [p.split(" gives away ")[1].split(",")[0] for p in problems]
+    _same(given, ["'Replay  To'"])

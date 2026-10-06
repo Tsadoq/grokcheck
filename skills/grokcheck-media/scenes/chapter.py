@@ -211,8 +211,12 @@ SCENE_LEFT = -6.25
 SCENE_RIGHT = 6.25
 SCENE_TOP = 2.35
 SCENE_BOTTOM = -2.85
-PANEL_LEFT = -0.75
+BAND_BOTTOM = -3.85
+BAND_GAP = 0.3
 GROW = 2.4
+FOLD_GAIN = 1.3
+READABLE = 28
+CAP_HEIGHT = 0.73
 CAPTION_Y = -3.45
 NODE_SIZE = 32
 EDGE_SIZE = 26
@@ -266,7 +270,10 @@ def link(points, lines, *, arc=None):  # noqa: ANN001, ANN201
 
 
 def flow(scene):  # noqa: ANN001, ANN201
-    """Every node and edge of a flow scene, placed on its layered grid."""
+    """Every node and edge of a flow scene, placed on its layered grid.
+
+    An edge from one band to the next runs through the gap between them.
+    """
     boxes = {
         n["id"]: node_box(n["label"], decision=n["decision"]) for n in scene["nodes"]
     }
@@ -289,10 +296,14 @@ def flow(scene):  # noqa: ANN001, ANN201
     for ident, box in boxes.items():
         box.move_to(place[ident])
     parts = dict(boxes)
+    bands = scene.get("bands") or dict.fromkeys(boxes, 0)
     for edge in scene["edges"]:
         start, end = boxes[edge["from"]], boxes[edge["to"]]
         if edge["id"] in scene["back"]:
             parts[edge["id"]] = loop(start, end, edge["label"], scene["direction"])
+            continue
+        if bands[edge["from"]] != bands[edge["to"]]:
+            parts[edge["id"]] = crossing(edge, boxes, bands, scene["direction"])
             continue
         if scene["direction"] == "TD":
             a, b = start.get_bottom(), end.get_top()
@@ -312,6 +323,27 @@ def flow(scene):  # noqa: ANN001, ANN201
             tag.move_to(label_at)
         parts[edge["id"]] = drawn
     return parts
+
+
+def crossing(edge, boxes, bands, direction):  # noqa: ANN001, ANN201
+    """Draw an edge into the next band through the gap between the two bands."""
+    start, end = boxes[edge["from"]], boxes[edge["to"]]
+    near = VGroup(*(b for i, b in boxes.items() if bands[i] == bands[edge["from"]]))
+    far = VGroup(*(b for i, b in boxes.items() if bands[i] == bands[edge["to"]]))
+    if direction == "TD":
+        a, b = start.get_right(), end.get_left()
+        mid = (near.get_right()[0] + far.get_left()[0]) / 2
+        points = [a, [mid, a[1], 0], [mid, b[1], 0], b]
+        label_at = [mid, (a[1] + b[1]) / 2, 0]
+    else:
+        a, b = start.get_bottom(), end.get_top()
+        mid = (near.get_bottom()[1] + far.get_top()[1]) / 2
+        points = [a, [a[0], mid, 0], [b[0], mid, 0], b]
+        label_at = [(a[0] + b[0]) / 2, mid, 0]
+    drawn = link(points, edge["label"])
+    if len(drawn) > 2:  # noqa: PLR2004
+        VGroup(*drawn[2:]).move_to(label_at)
+    return drawn
 
 
 def td_unit(scene, boxes):  # noqa: ANN001, ANN201
@@ -378,12 +410,14 @@ def sequence(scene):  # noqa: ANN001, ANN201
 
 
 def state(scene):  # noqa: ANN001, ANN201
-    """Items in one row, ready for pointers underneath."""
+    """Items in rows, with room for pointers under each row."""
     boxes = {i["id"]: node_box(i["label"]) for i in scene["items"]}
     wide = max(box.width for box in boxes.values())
+    tall = max(box.height for box in boxes.values())
     for ident, box in boxes.items():
         box[0].stretch_to_fit_width(wide)
-        box.move_to([scene["positions"][ident][0] * (wide + 0.25), 0, 0])
+        column, row = scene["positions"][ident]
+        box.move_to([column * (wide + 0.25), -row * (tall + 1.6), 0])
     return boxes
 
 
@@ -423,12 +457,12 @@ def paint(part, kind, mode):  # noqa: ANN001, ANN201
     return part
 
 
-def fitting(mobjects, right, cap):  # noqa: ANN001, ANN201
-    """Return the scale, centre and target that fit `mobjects` left of `right`."""
+def fitting(mobjects, bottom, cap):  # noqa: ANN001, ANN201
+    """Return the scale, centre and target that fit `mobjects` above `bottom`."""
     group = VGroup(*mobjects)
-    width, height = right - SCENE_LEFT, SCENE_TOP - SCENE_BOTTOM
+    width, height = SCENE_RIGHT - SCENE_LEFT, SCENE_TOP - bottom
     scale = min(cap, width / group.width, height / group.height)
-    target = np.array([(SCENE_LEFT + right) / 2, (SCENE_TOP + SCENE_BOTTOM) / 2, 0])
+    target = np.array([(SCENE_LEFT + SCENE_RIGHT) / 2, (SCENE_TOP + bottom) / 2, 0])
     return scale, group.get_center(), target
 
 
@@ -465,18 +499,14 @@ class Chapter(Scene):
 
     def scened(self, scene):  # noqa: ANN001, ANN201
         """Keep one scene on screen and animate what each beat changes."""
-        build = {"flow": flow, "sequence": sequence, "state": state}[scene["kind"]]
-        self.parts = build(scene)
+        coded = [code_band(b["code"]) for b in CHAPTER["beats"] if b["code"]]
+        bottom = coded[0].get_top()[1] + BAND_GAP if coded else SCENE_BOTTOM
+        self.parts, self.world, layout = folded(scene, bottom)
         links = {e["id"] for e in scene.get("edges", []) + scene.get("messages", [])}
         self.kinds = {i: "link" if i in links else "box" for i in self.parts}
-        room = Dot().set_opacity(0)
-        if scene["kind"] == "state":
-            room.move_to(VGroup(*self.parts.values()).get_bottom() + DOWN * 1.4)
-        self.world = [*self.parts.values(), room]
-        layout = fitting(self.world, SCENE_RIGHT, GROW)
         for mobject in self.world:
             moved(mobject, layout)
-        self.zoom, self.narrow = layout[0], False
+        self.zoom = layout[0]
         self.modes = dict.fromkeys(self.parts, "normal")
         self.shown = set()
         self.pointers, self.extras = {}, []
@@ -496,9 +526,7 @@ class Chapter(Scene):
         step = beat["step"]
         settle = [FadeOut(extra) for extra in self.extras]
         self.extras = []
-        panel = code_panel(beat["code"]) if beat["code"] else None
-        relayout = self.relayout(beat, panel)
-        self.extras += [panel] if panel else []
+        self.extras += [code_band(beat["code"])] if beat["code"] else []
         if beat["caption"]:
             caption = Paragraph(
                 *beat["caption"], font=SANS, font_size=30, color=FG, alignment="center"
@@ -515,40 +543,13 @@ class Chapter(Scene):
         }
         for ident, part in self.parts.items():
             if ident not in self.shown:
-                moved(paint(part, self.kinds[ident], wanted[ident]), relayout)
-            elif relayout or wanted[ident] != self.modes[ident]:
+                paint(part, self.kinds[ident], wanted[ident])
+            elif wanted[ident] != self.modes[ident]:
                 part.generate_target()
                 paint(part.target, self.kinds[ident], wanted[ident])
-                moved(part.target, relayout)
                 settle.append(MoveToTarget(part))
-        moved(self.world[-1], relayout)
-        for drawn in self.pointers.values() if relayout else ():
-            moved(drawn.generate_target(), relayout)
-            settle.append(MoveToTarget(drawn))
         self.modes = wanted
         return settle
-
-    def relayout(self, beat, panel):  # noqa: ANN001, ANN201
-        """Return the layout change a code panel opening or closing needs."""
-        if bool(beat["code"]) == self.narrow:
-            return None
-        self.narrow = bool(beat["code"])
-        if self.narrow:
-            on = [
-                part
-                for ident, part in self.parts.items()
-                if ident in self.shown or ident in beat["step"]["add"]
-            ]
-            change = fitting(
-                [*on, *self.pointers.values()],
-                panel.get_left()[0] - 0.4,
-                GROW / self.zoom,
-            )
-        else:
-            everything = [*self.world, *self.pointers.values()]
-            change = fitting(everything, SCENE_RIGHT, GROW / self.zoom)
-        self.zoom *= change[0]
-        return change
 
     def travel(self, step):  # noqa: ANN001, ANN201
         """Move this beat's pointers, or run a marker along its path."""
@@ -589,8 +590,37 @@ def enter(part, kind):  # noqa: ANN001, ANN201
     return AnimationGroup(Create(part[0]), FadeIn(VGroup(*part[1:])), lag_ratio=0.5)
 
 
-def code_panel(frame):  # noqa: ANN001, ANN201
-    """At most five lines of code, in a panel right of the scene."""
+def folded(scene, bottom):  # noqa: ANN001, ANN201
+    """Build the scene in the fold that draws its labels largest above `bottom`.
+
+    Another band must grow the labels by `FOLD_GAIN` to be worth it. Writes
+    the labels' font size in pixels to `fit.json` and stops when it is under
+    `READABLE`.
+    """
+    build = {"flow": flow, "sequence": sequence, "state": state}[scene["kind"]]
+    best = None
+    for fold in scene.get("wraps") or [{"positions": scene["positions"]}]:
+        parts = build({**scene, **fold})
+        room = Dot().set_opacity(0)
+        if scene["kind"] == "state":
+            room.move_to(VGroup(*parts.values()).get_bottom() + DOWN * 1.4)
+        world = [*parts.values(), room]
+        layout = fitting(world, bottom, GROW)
+        if best is None or layout[0] > best[2][0] * FOLD_GAIN:
+            best = (parts, world, layout, len(set(fold.get("bands", {}).values())))
+    parts, world, layout, bands = best
+    cap = Text("H", font=SANS, font_size=NODE_SIZE).height * layout[0]
+    label_px = round(cap / CAP_HEIGHT * config.pixel_height / config.frame_height, 1)
+    Path(__file__).with_name("fit.json").write_text(
+        json.dumps({"label_px": label_px, "bands": max(bands, 1)}), "utf-8"
+    )
+    if label_px < READABLE:
+        raise SystemExit(3)
+    return parts, world, layout
+
+
+def code_band(frame):  # noqa: ANN001, ANN201
+    """At most five lines of code, in a band along the bottom of the frame."""
     body = Code(
         code_string=frame["code"],
         language=frame.get("language") or "python",
@@ -601,10 +631,9 @@ def code_panel(frame):  # noqa: ANN001, ANN201
             "fill_color": PANEL,
             "stroke_color": BORDER,
             "stroke_width": 2,
-            "buff": 0.35,
+            "buff": 0.25,
         },
-        paragraph_config={"font": MONO, "font_size": 34},
+        paragraph_config={"font": MONO, "font_size": 18},
     )
-    fit(body, width=SCENE_RIGHT - PANEL_LEFT, height=SCENE_TOP - SCENE_BOTTOM)
-    body.move_to([0, (SCENE_TOP + SCENE_BOTTOM) / 2, 0])
-    return body.align_to([SCENE_RIGHT, 0, 0], RIGHT)
+    fit(body, width=SCENE_RIGHT - SCENE_LEFT)
+    return body.move_to([0, BAND_BOTTOM + body.height / 2, 0])

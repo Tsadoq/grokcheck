@@ -286,8 +286,29 @@ def _check_authored(
                 project_root, row["cite"], f"{where}.cite"
             ):
                 check.add(path, message)
-        if verdicts.get(str(index)) == "contradicted":
+        if verdicts.get(str(index)) == "contradicted" and not _stale_row(
+            source, index, row, project_root
+        ):
             check.add(where, "the grounding pass found this row contradicted")
+
+
+def _stale_row(
+    source: Mapping[str, Any],
+    index: int,
+    row: Mapping[str, object],
+    project_root: Path,
+) -> bool:
+    """Say whether the row changed since its verdict's hash was stored."""
+    from grokcheck.ground import claim_hash, row_entry  # noqa: PLC0415
+
+    stored = (source.get("verified_hashes") or {}).get(str(index))
+    if (
+        stored is None
+        or "cite" not in row
+        or cite_problems(project_root, row["cite"], "cite")
+    ):
+        return False
+    return bool(stored != claim_hash(row_entry(project_root, "", dict(row))))
 
 
 def cite_problems(project_root: Path, cite: object, path: str) -> list[tuple[str, str]]:

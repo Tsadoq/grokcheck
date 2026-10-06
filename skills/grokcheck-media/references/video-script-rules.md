@@ -4,12 +4,17 @@ How to write one concept video chapter script. The rules come from `research/med
 
 ## The rule: one picture that changes
 
-A chapter animates the section's diagram or trace as one `scene` that stays on screen for the whole chapter. Beats build it up, highlight the path being narrated and move a marker along it. The viewer watches one picture change, not a slide show of separate boxes. Code appears only when one line must be read, and then as a short excerpt beside the scene.
+A chapter animates the section's diagram or trace as one `scene` that stays on screen for the whole chapter. Beats build it up, highlight the path being narrated and move a marker along it. The viewer watches one picture change, not a slide show of separate boxes. Code appears only when one line must be read, and then as a short excerpt in a band along the bottom of the frame, under the scene.
 
 `video chapter` refuses a chapter that breaks this:
 
 - more than 3 beats and no `scene`;
-- more than one code beat, or a code beat longer than 5 lines.
+- more than one code beat, a code beat longer than 5 lines, or a code line longer than 80 characters;
+- a scene whose box labels would be set under 28 px in a 1080p frame.
+
+## The section's questions stay unanswered
+
+The chapter teaches the first case the section shows, never the case its gate or checkpoint questions ask about. You receive those questions with their answers: do not narrate, caption or label any answer, and do not walk through the asked case even in other words. Pass each gate's correct answer to `video chapter` as `--avoid "<answer>"` (repeat it per answer); it refuses a script whose `say`, `show` or scene labels contain one, matched as whole words in any case.
 
 ## The script file
 
@@ -43,14 +48,14 @@ One JSON object per chapter, written from one chapter spec that `video plan` pri
   - `flow`: `nodes` (`{"id", "label", "decision"?}`) and `edges` (`{"from", "to", "label"}`), with `direction` `TD` (default) or `LR`; or `mermaid`, a `flowchart` in the subset `A[label] -->|label| B{label}`, so the chapter reuses the section's own diagram. `{...}` marks a decision. Layout is automatic: layers top-down (or left-right), children centred under their parents, an edge back to an earlier node drawn as a loop. An edge's id is `from->to`.
   - `sequence`: `actors` (`{"id", "label"?}`) in columns and `messages` (`{"from", "to", "label", "id"?}`) in rows below them. A message's id defaults to `m1`, `m2`, ... in order.
   - `state`: `items` (`{"id", "label"}`) in one row, plus named pointers such as `cursor` or `end` that appear under an item the first time a beat moves them there.
-  Keep it to 12 boxes and labels short: about 18 characters a box or an edge.
+  Keep it to 12 boxes and labels short: about 18 characters a box or an edge. A long state or a long flow folds into rows (a state, an `LR` flow) or columns (a `TD` flow) when that sets its labels larger; when even the best fold sets them under 28 px, `video chapter` refuses the chapter and says so. Then drop boxes, shorten labels, or move part of the picture to another chapter.
 - Each beat says what changes. Nothing is on screen until a beat adds it.
   - `add`: ids that appear, in order. Adding a link also adds the boxes at its ends.
   - `focus`: ids to highlight for this beat; everything else on screen dims.
   - `move`: in a flow or sequence, the links a marker travels in order (each must start where the previous one ended); in a state, `{"pointer": "item id"}`.
   - `branch`: the edge a decision takes; it lights up and the decision's other edges and their targets dim.
   Focus and branch last one beat. Added boxes and pointer positions stay.
-- `show`: with a scene, an optional caption under the picture, or with `"code": true` at most 5 lines of code in a panel to the right, while the scene shrinks to the left. The panel goes away on the next beat. Add `"language": "bash"` (or any Pygments name) when it is not Python. Without a scene, `show` is the whole frame: code, `a -> b -> c` boxes (up to four), a list (several lines, `1. a  2. b`, or `a | b`), or one short statement.
+- `show`: with a scene, an optional caption under the picture, or with `"code": true` at most 5 lines of code, each at most 80 characters, in a band along the bottom of the frame. The scene keeps its place and size; a chapter with a code beat leaves room for the band from its first beat. The band goes away on the next beat. Add `"language": "bash"` (or any Pygments name) when it is not Python. Without a scene, `show` is the whole frame: code, `a -> b -> c` boxes (up to four), a list (several lines, `1. a  2. b`, or `a | b`), or one short statement.
 - `claims` use the lesson claim shape. Every factual sentence carries one, backed by the cited lines the spec lists. A claim's text may name identifiers; the narration may not.
 - The narration must stay within `word_budget` (150 words a minute); `video chapter` refuses a script more than 20% over it.
 - A scene needs `--renderer manim`.
@@ -85,6 +90,6 @@ The speech engine also respells a few words before speaking: grokcheck, keepaliv
 
 `video chapter` prints three things to read before the chapter counts as done:
 
-- `contact_sheet`: one frame every three seconds in one image. Look for text too small, labels colliding, anything off the edge, and a picture that does not change from tile to tile.
+- `contact_sheet`: one frame every three seconds in one image, each tile a sixth of full size. Use it to see that the picture changes from tile to tile. It is too small to judge text, so also look at full-size frames of the busiest beats: the code beat, the beat with the most boxes on screen, and the last beat. Write them with `video frames <path> --at <seconds>... --out-dir <dir>` (or `--every <seconds>`), taking each beat's time from just before the `end` of its entry in `cues`, and read the PNGs it lists. Look for text too small, labels colliding and anything off the edge.
 - `transcript_diff`: sentences the speech engine did not say as written, already normalised for US/UK spelling and spoken numbers. A skipped or invented word is a defect; a likely mispronunciation ("except" heard as "accept") needs a human to listen.
 - `claims`: the claim manifest, in the shape `grokcheck ground` prints. A fresh-context subagent judges each claim against its evidence alone. Neither of the other two checks catches a false claim.

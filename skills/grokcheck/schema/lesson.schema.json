@@ -402,7 +402,8 @@
                     "claim": {"$ref": "#/$defs/text"},
                     "backing": {"$ref": "#/$defs/backing"},
                     "checked_by_spike": {"$ref": "#/$defs/identifier"},
-                    "verified": {"$ref": "#/$defs/claims/items/properties/verified"}
+                    "verified": {"$ref": "#/$defs/claims/items/properties/verified"},
+                    "verified_hash": {"type": "string"}
                   }
                 }
               }
@@ -703,7 +704,8 @@
                     },
                     "note": {"$ref": "#/$defs/text"},
                     "link": {"type": "array", "items": {"$ref": "#/$defs/text"}},
-                    "verified": {"enum": ["supported", "unchecked"]}
+                    "verified": {"enum": ["supported", "unchecked"]},
+                    "verified_hash": {"type": "string"}
                   }
                 }
               },
@@ -733,7 +735,8 @@
                     "note": {"$ref": "#/$defs/text"},
                     "tone": {"enum": ["ok", "warn", "bad", "accent", "muted"]},
                     "example": {"type": "object"},
-                    "verified": {"enum": ["supported", "unchecked"]}
+                    "verified": {"enum": ["supported", "unchecked"]},
+                    "verified_hash": {"type": "string"}
                   }
                 }
               },
@@ -750,7 +753,8 @@
                   "properties": {
                     "where": {"$ref": "#/$defs/selector"},
                     "text": {"$ref": "#/$defs/text"},
-                    "verified": {"enum": ["supported", "unchecked"]}
+                    "verified": {"enum": ["supported", "unchecked"]},
+                    "verified_hash": {"type": "string"}
                   }
                 }
               },
@@ -806,6 +810,10 @@
             "description": "The grounding pass's verdict. A `contradicted` claim is refused, so it is not listed.",
             "enum": ["supported", "unchecked"],
             "default": "unchecked"
+          },
+          "verified_hash": {
+            "description": "The hash of the claim's text, backing and evidence when the verdict was given. The verdict holds only while it matches.",
+            "type": "string"
           }
         }
       }
@@ -1345,7 +1353,8 @@
               },
               "note": {"$ref": "#/$defs/text"},
               "link": {"type": "array", "items": {"$ref": "#/$defs/text"}},
-              "verified": {"enum": ["supported", "unchecked"]}
+              "verified": {"enum": ["supported", "unchecked"]},
+              "verified_hash": {"type": "string"}
             }
           }
         },
@@ -1375,7 +1384,8 @@
               "note": {"$ref": "#/$defs/text"},
               "tone": {"enum": ["ok", "warn", "bad", "accent", "muted"]},
               "example": {"type": "object"},
-              "verified": {"enum": ["supported", "unchecked"]}
+              "verified": {"enum": ["supported", "unchecked"]},
+              "verified_hash": {"type": "string"}
             }
           }
         }

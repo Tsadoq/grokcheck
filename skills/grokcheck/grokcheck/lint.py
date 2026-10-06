@@ -26,6 +26,7 @@ from grokcheck.lesson import (
     SelectItems,
     SingleChoice,
     TraceElement,
+    VideoElement,
     ViewElement,
     VocabElement,
 )
@@ -44,7 +45,7 @@ _ALL_OF_THE_ABOVE = re.compile(r"\ball of the above\b", re.IGNORECASE)
 _POSITION_BIAS = 0.6
 _POSITION_MIN_QUESTIONS = 5
 _FENCE = re.compile(r"```.*?```", re.DOTALL)
-_SENTENCE_END = re.compile(r"(?<=[.?!])\s+")
+_SENTENCE_END = re.compile(r"(?<=[.?!])[\"'\u201d\u2019)]*\s+")
 _PARAGRAPH = re.compile(r"\n\s*\n")
 _ACRONYM = re.compile(r"\b[A-Z]{3,}\b")
 _DEFINITION = re.compile(r"\b([A-Z]{3,})\s*\(|\(([A-Z]{3,})\)")
@@ -65,6 +66,7 @@ _MAX_TABLE_ROWS = 10
 _MAX_TABLE_COLUMNS = 5
 _MAX_SENTENCE_WORDS = 25
 _MAX_INTRO_SENTENCES = 12
+_MIN_ANSWER_CHARS = 8
 _ACTION_STARTS = frozenset(
     {
         "so", "ask", "cancel", "check", "compare", "find", "fix", "follow",
@@ -261,6 +263,7 @@ def media(lesson: Lesson) -> list[LintWarning]:
     warnings = data_media(lesson)
     for i, section in enumerate(lesson.sections):
         warnings.extend(_section_media(i, section))
+        warnings.extend(_gates_given_away(i, section))
         short = [e for e in section.elements if e.depth != "detail"]
         if all(isinstance(e, (ProseElement, CodeElement)) for e in short):
             warnings.append(
@@ -308,6 +311,44 @@ def media(lesson: Lesson) -> list[LintWarning]:
         )
     warnings.extend(_rejected_for_time(plan.rejected, plan.rationale))
     return warnings
+
+
+def _gates_given_away(i: int, section: Section) -> Iterator[LintWarning]:
+    """Warn when a section's body or video transcript states a gate's answer."""
+    told = " ".join(
+        [section.body]
+        + [e.transcript for e in section.elements if isinstance(e, VideoElement)]
+    )
+    views = {e.id: e for e in section.elements if isinstance(e, ViewElement)}
+    for k, question in enumerate(section.checkpoints):
+        patterns = _answer_patterns(question, views)
+        if patterns and all(re.search(p, told, re.IGNORECASE) for p in patterns):
+            yield LintWarning(
+                f"sections[{i}].checkpoints[{k}]",
+                "gate_given_away",
+                "the section's body or video states this gate's answer; ask about"
+                " a case they do not state",
+            )
+
+
+def _answer_patterns(question: Question, views: dict[str, ViewElement]) -> list[str]:
+    """Return patterns that together find a gate's answer stated in prose."""
+    if isinstance(question, (SingleChoice, PredictOutput)) and question.options:
+        text = question.options[question.correct or 0].text.strip().rstrip(".")
+        if len(text) < _MIN_ANSWER_CHARS:
+            return []
+        return [rf"(?<!\w){re.escape(text)}(?!\w)"]
+    if not isinstance(question, SelectItems):
+        return []
+    view = views.get(question.view or "")
+    where = question.frame.get("where") if question.frame else view and view.where
+    if not isinstance(where, dict):
+        return []
+    return [
+        rf"(?<!\w){re.escape(field)}\W{{1,3}}{re.escape(str(value))}(?!\w)"
+        for field, value in where.items()
+        if isinstance(value, (str, int, float)) and not isinstance(value, bool)
+    ]
 
 
 def _views(lesson: Lesson) -> Iterator[tuple[str, ViewElement]]:

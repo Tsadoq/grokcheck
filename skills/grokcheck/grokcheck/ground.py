@@ -4,12 +4,15 @@ A fresh-context subagent reads the manifest, judges every claim against its
 evidence alone, and its verdicts are written back into the lesson's `verified`
 fields. A claim is addressed by its authored JSON path, `Lesson.claims()`.
 A row of an authored dataset is a claim `data:<id>.rows[<k>]`, and its verdict
-goes into that data file's `source.verdicts`.
+goes into that data file's `source.verdicts`. Each verdict is stored with
+`claim_hash` of what was judged, so a verdict holds only while the claim's
+text, backing and evidence stay the same.
 """
 
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import json
 import re
 from typing import TYPE_CHECKING, Any
@@ -22,6 +25,7 @@ from grokcheck.lesson import (
     Problem,
     SpikeBacking,
     ViewElement,
+    load_lesson,
     parse_claim_id,
 )
 from grokcheck.selector import matches
@@ -41,6 +45,33 @@ VERDICTS = {
 
 MAX_EVIDENCE_ROWS = 20
 _ROW_CLAIM = re.compile(r"data:([A-Za-z0-9][A-Za-z0-9_-]*)\.rows\[(\d+)\]")
+
+
+def claim_hash(entry: dict[str, Any]) -> str:
+    """Return the hash of a manifest entry's `text`, `backing` and `evidence`."""
+    judged = {key: entry[key] for key in ("text", "backing", "evidence")}
+    encoded = json.dumps(judged, sort_keys=True, default=str).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()[:16]
+
+
+def unsettled(
+    entries: list[dict[str, Any]], lesson_path: Path, project_root: Path
+) -> list[dict[str, Any]]:
+    """Keep the entries with no verdict, a `not_shown` one, or a stale hash."""
+    raw = json.loads(lesson_path.read_text(encoding="utf-8"))
+    files: dict[Path, dict[str, Any]] = {}
+    kept = []
+    for entry in entries:
+        target = _target(raw, entry["claim_id"], project_root, files)
+        if target is None:
+            kept.append(entry)
+            continue
+        verdicts, key, hashes, hash_key = target
+        if verdicts.get(key, "unchecked") == "unchecked" or hashes.get(
+            hash_key
+        ) != claim_hash(entry):
+            kept.append(entry)
+    return kept
 
 
 def manifest(lesson: Lesson, project_root: Path) -> list[dict[str, Any]]:
@@ -135,23 +166,24 @@ def _note_items(lesson: Lesson, claim_id: str) -> list[dict[str, object]] | None
 
 def _authored_entries(project_root: Path, dataset_id: str) -> list[dict[str, Any]]:
     raw = json.loads(data.data_path(project_root, dataset_id).read_text("utf-8"))
-    entries: list[dict[str, Any]] = []
-    for k, row in enumerate(raw["rows"]):
-        cite = row["cite"]
-        start, end = cite["lines"]
-        lines = (project_root / cite["file"]).read_text(encoding="utf-8").splitlines()
-        text = ", ".join(
-            f"{key}={value}" for key, value in row.items() if key != "cite"
-        )
-        entries.append(
-            {
-                "claim_id": f"data:{dataset_id}.rows[{k}]",
-                "text": text,
-                "backing": cite,
-                "evidence": "\n".join(lines[start - 1 : end]),
-            }
-        )
-    return entries
+    return [
+        row_entry(project_root, f"data:{dataset_id}.rows[{k}]", row)
+        for k, row in enumerate(raw["rows"])
+    ]
+
+
+def row_entry(project_root: Path, claim_id: str, row: dict[str, Any]) -> dict[str, Any]:
+    """Return the manifest entry of an authored row, judged on its `cite`."""
+    cite = row["cite"]
+    start, end = cite["lines"]
+    lines = (project_root / cite["file"]).read_text(encoding="utf-8").splitlines()
+    text = ", ".join(f"{key}={value}" for key, value in row.items() if key != "cite")
+    return {
+        "claim_id": claim_id,
+        "text": text,
+        "backing": cite,
+        "evidence": "\n".join(lines[start - 1 : end]),
+    }
 
 
 def apply_verdicts(
@@ -159,22 +191,29 @@ def apply_verdicts(
     verdicts: Sequence[dict[str, Any]],
     project_root: Path | None = None,
 ) -> Path:
-    """Write each verdict into its claim's `verified` field and return `lesson_path`.
+    """Write each verdict and its `claim_hash` into the claim; return `lesson_path`.
 
-    A `data:<id>.rows[<k>]` verdict goes into that dataset's `source.verdicts`
-    under `project_root`. Raises `LessonError` and leaves every file untouched
-    if any verdict names an unknown claim or verdict.
+    The verdict goes into `verified` and the hash into `verified_hash`. A
+    `data:<id>.rows[<k>]` verdict goes into that dataset's `source.verdicts`
+    and its hash into `source.verified_hashes`. `project_root` defaults to the
+    lesson's folder. Raises `LessonError` and leaves every file untouched if
+    any verdict names an unknown claim or verdict.
     """
+    root = project_root or lesson_path.parent
+    hashes = {
+        entry["claim_id"]: claim_hash(entry)
+        for entry in manifest(load_lesson(lesson_path, root), root)
+    }
     raw = json.loads(lesson_path.read_text(encoding="utf-8"))
     files: dict[Path, dict[str, Any]] = {lesson_path: raw}
     problems: list[Problem] = []
-    updates: list[tuple[dict[str, Any], str, str]] = []
+    updates: list[tuple[tuple[dict[str, Any], str, dict[str, Any], str], str, str]] = []
     for index, verdict in enumerate(verdicts):
         where = f"verdicts[{index}]"
         claim_id = verdict.get("claim_id")
         target = (
-            _target(raw, claim_id, project_root, files)
-            if isinstance(claim_id, str)
+            _target(raw, claim_id, root, files)
+            if isinstance(claim_id, str) and claim_id in hashes
             else None
         )
         if target is None:
@@ -184,11 +223,12 @@ def apply_verdicts(
                 Problem(where, f"verdict must be one of {', '.join(VERDICTS)}")
             )
         else:
-            updates.append((*target, VERDICTS[verdict["verdict"]]))
+            updates.append((target, VERDICTS[verdict["verdict"]], hashes[claim_id]))
     if problems:
         raise LessonError(problems)
-    for holder, key, verified in updates:
-        holder[key] = verified
+    for (verdicts_at, key, hashes_at, hash_key), verified, digest in updates:
+        verdicts_at[key] = verified
+        hashes_at[hash_key] = digest
     lesson_path.write_text(
         json.dumps(raw, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
@@ -204,16 +244,14 @@ def apply_verdicts(
 def _target(
     raw: dict[str, Any],
     claim_id: str,
-    project_root: Path | None,
+    project_root: Path,
     files: dict[Path, dict[str, Any]],
-) -> tuple[dict[str, Any], str] | None:
-    """Return the object and key that hold the claim's verdict."""
+) -> tuple[dict[str, Any], str, dict[str, Any], str] | None:
+    """Return the object and key holding the claim's verdict, then its hash's."""
     match = _ROW_CLAIM.fullmatch(claim_id)
     if match is None:
-        claim = _claim_at(raw, claim_id)
-        return None if claim is None else (claim, "verified")
-    if project_root is None:
-        return None
+        claim = claim_at(raw, claim_id)
+        return None if claim is None else (claim, "verified", claim, "verified_hash")
     path = data.data_path(project_root, match.group(1))
     if path not in files:
         if not path.is_file():
@@ -223,10 +261,17 @@ def _target(
     row = int(match.group(2))
     if content["source"].get("kind") != "authored" or row >= len(content["rows"]):
         return None
-    return content["source"].setdefault("verdicts", {}), str(row)
+    source = content["source"]
+    return (
+        source.setdefault("verdicts", {}),
+        str(row),
+        source.setdefault("verified_hashes", {}),
+        str(row),
+    )
 
 
-def _claim_at(raw: dict[str, Any], claim_id: str) -> dict[str, Any] | None:
+def claim_at(raw: dict[str, Any], claim_id: str) -> dict[str, Any] | None:
+    """Return the authored object at `claim_id` in the raw lesson, or `None`."""
     parsed = parse_claim_id(claim_id)
     if parsed is None:
         return None

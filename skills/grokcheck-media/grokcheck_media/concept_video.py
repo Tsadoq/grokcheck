@@ -50,6 +50,7 @@ _WRAP = {"text": 30, "list": 44, "flow": 14}
 _WRAP_LONG_FLOW = 9
 _MAX_SAY_WORDS = 25
 _MAX_IDENTIFIERS = 2
+_READABLE_PX = 28
 _CAMEL = re.compile(r"\b[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]*)+\b|\b[a-z]+[A-Z]\w*")
 _SPLIT_CLASS = re.compile(r"(?<=[a-z,] )[A-Z][a-z]+(?: [A-Z][a-z]+){2,}")
 _DOTTED = re.compile(r"\b[A-Za-z_]\w*\.[A-Za-z_]\w*|\b\w+ dot \w+")
@@ -112,8 +113,12 @@ def plan_chapters(
     return chapters
 
 
-def lint_script(script: dict[str, Any]) -> list[str]:
-    """Return what is wrong with a chapter script; over budget by 20% is wrong."""
+def lint_script(script: dict[str, Any], avoid: Sequence[str] = ()) -> list[str]:
+    """Return what is wrong with a chapter script; over budget by 20% is wrong.
+
+    A script that says or shows any `avoid` text, as whole words in any case,
+    is wrong too.
+    """
     missing = [key for key in _SCRIPT_FIELDS if key not in script]
     if missing:
         return [f"the script lacks {', '.join(missing)}"]
@@ -135,6 +140,7 @@ def lint_script(script: dict[str, Any]) -> list[str]:
     ]
     problems += scene.check_script(script.get("scene"), beats)
     problems += _narration_problems([str(beat.get("say", "")) for beat in beats])
+    problems += _leaks(script, avoid)
     words = sum(len(str(beat.get("say", "")).split()) for beat in beats)
     budget = script["word_budget"]
     if words > budget * _OVER_BUDGET:
@@ -170,22 +176,55 @@ def _narration_problems(says: Sequence[str]) -> list[str]:
     return problems
 
 
-def build_chapter(
+def _leaks(script: dict[str, Any], avoid: Sequence[str]) -> list[str]:
+    texts = {
+        f"beats[{index}].{key}": str(beat[key])
+        for index, beat in enumerate(script["beats"])
+        for key in ("say", "show")
+        if key in beat
+    }
+    if isinstance(script.get("scene"), dict):
+        try:
+            drawn = scene.normalise(script["scene"])
+        except (KeyError, TypeError, ValueError):
+            drawn = {}
+        labels = [
+            " ".join(part["label"])
+            for key in ("nodes", "edges", "actors", "messages", "items")
+            for part in drawn.get(key, [])
+        ]
+        texts["the scene"] = "\n".join(labels)
+    return [
+        f"{at} gives away {text!r}, the answer to a question the section asks;"
+        " teach another case"
+        for text in avoid
+        if text.strip()
+        for at, said in texts.items()
+        if re.search(
+            r"(?<!\w)" + r"\s+".join(map(re.escape, text.split())) + r"(?!\w)",
+            said,
+            re.IGNORECASE,
+        )
+    ]
+
+
+def build_chapter(  # noqa: PLR0913
     script: dict[str, Any],
     renderer: Renderer,
     out_dir: Path,
     *,
     project_root: Path,
     allow_cloud: bool = False,
+    avoid: Sequence[str] = (),
 ) -> dict[str, Any]:
     """Render, check and cache one chapter, then copy it to `out_dir/<chapter_id>/`.
 
     The cache key is what the chapter shows and says, the renderer and the
     Manim scene file, so a claim edit or an unchanged chapter is never rendered
     again. Returns the chapter record plus `claims`, the claim manifest for a
-    fresh-context check.
+    fresh-context check. `avoid` is passed to `lint_script`.
     """
-    problems = lint_script(script)
+    problems = lint_script(script, avoid)
     if problems:
         raise ValueError("; ".join(problems))
     if "scene" in script and renderer != "manim":
@@ -409,7 +448,8 @@ def _scene(script: dict[str, Any]) -> dict[str, Any] | None:
     if "scene" not in script:
         return None
     drawn = scene.normalise(script["scene"])
-    return {**drawn, **scene.layout(drawn)}
+    laid = scene.layout(drawn)
+    return {**drawn, **laid, "wraps": scene.wraps(drawn, laid)}
 
 
 def _manim(
@@ -439,7 +479,21 @@ def _manim(
     media = work / "media"
     command = ["manim", "render", "--resolution", "1920,1080", "--frame_rate", "30"]
     command += ["--media_dir", str(media), "-o", "chapter", str(scene_file), "Chapter"]
-    _run(command, cwd=work)
+    try:
+        _run(command, cwd=work)
+    except subprocess.CalledProcessError:
+        fit = work / "fit.json"
+        label_px = (
+            json.loads(fit.read_text("utf-8"))["label_px"] if fit.is_file() else 0
+        )
+        if label_px and label_px < _READABLE_PX:
+            msg = (
+                f"the scene's box labels would be set at {label_px} px, under"
+                f" {_READABLE_PX}; split the scene: fewer boxes, shorter labels,"
+                " or part of it in another beat or chapter"
+            )
+            raise ValueError(msg) from None
+        raise
     shutil.move(next(media.rglob("chapter.mp4")), video)
 
 
