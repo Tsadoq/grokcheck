@@ -129,3 +129,26 @@ def test_cancelled_task_records_cancelled_not_done(tmp_path: Path) -> None:
     ends = {e.task: e.event for e in trace.events if e.event in {"done", "cancelled"}}
     if ends.get("S") != "cancelled":
         pytest.fail(f"task S did not end cancelled: {ends}")
+
+
+def test_init_globals_reach_the_script_and_lines_are_not_capped(
+    tmp_path: Path,
+) -> None:
+    """`init_globals` seed the script; `lines_run` keeps function lines, uncapped."""
+    script = tmp_path / "script.py"
+    script.write_text(
+        "def total(size):\n    result = 0\n    for n in range(size):\n"
+        "        result += n\n    return result\nseen.append(total(SIZE))\n"
+    )
+    seen: list[int] = []
+
+    trace = record(
+        script, {script}, max_events=1, init_globals={"SIZE": 4, "seen": seen}
+    )
+
+    if seen != [6]:
+        pytest.fail(f"the script saw {seen}")
+    if trace.lines_run != {str(script): {2, 3, 4, 5}}:
+        pytest.fail(f"lines run are {trace.lines_run}")
+    if len(trace.events) != 1 or not trace.truncated:
+        pytest.fail("max_events did not cap the stored events")

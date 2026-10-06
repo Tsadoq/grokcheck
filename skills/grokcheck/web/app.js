@@ -1,8 +1,9 @@
 import { askQuestion, fetchLesson, followReplies, offline, sendAnswer, skippedOffline, submitQuiz } from "./api.js";
-import { GATING_ELEMENTS, renderElements } from "./elements.js";
+import { gatesSection, renderElements } from "./elements.js";
 import { renderMarkdown } from "./markdown.js";
 import { codeView, element, renderQuestion, renderReveal } from "./questions.js";
 import { recall, remember } from "./storage.js";
+import { configureViews } from "./view.js";
 
 const DEPTHS = [
   ["short", "Short"],
@@ -217,15 +218,14 @@ function questionCard(question, { final, label, onAnswered }) {
 }
 
 function sectionView(section, index, count, onComplete) {
-  const view = element("section", { class: "lesson-section", "data-section": section.id }, [
+  const view = element("section", { class: "lesson-section", id: section.id, "data-section": section.id }, [
     element("div", { class: "head" }, [
       element("p", { class: "eyebrow", text: `Chapter ${index + 1} of ${count}` }),
       element("h2", { text: section.title }),
     ]),
   ]);
   const content = element("div", { class: "section-body", html: renderMarkdown(section.body) });
-  const gates = (item) => GATING_ELEMENTS.has(item.type) && item.depth !== "detail";
-  let remaining = section.checkpoints.length + section.elements.filter(gates).length;
+  let remaining = section.checkpoints.length + section.elements.filter(gatesSection).length;
   const passGate = () => {
     remaining -= 1;
     if (remaining === 0) {
@@ -237,7 +237,7 @@ function sectionView(section, index, count, onComplete) {
     renderElements(section, {
       sectionId: section.id,
       onComplete: (item) => {
-        if (gates(item)) {
+        if (gatesSection(item)) {
           passGate();
         }
       },
@@ -520,6 +520,7 @@ async function main() {
   try {
     const lesson = await fetchLesson();
     showHeader(lesson);
+    configureViews(lesson);
     followReplies(showReply);
     startLesson(lesson);
   } catch (error) {

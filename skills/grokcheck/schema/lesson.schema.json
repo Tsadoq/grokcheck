@@ -7,7 +7,7 @@
   "required": ["schema_version", "title", "scope", "sections", "final"],
   "additionalProperties": false,
   "properties": {
-    "schema_version": {"const": 2},
+    "schema_version": {"description": "3 for lessons with views; 2 still loads.", "enum": [2, 3]},
     "title": {"$ref": "#/$defs/text"},
     "intro": {
       "description": "A short spoken-style opening shown above the first section; the media skill uses it as the video intro script.",
@@ -40,23 +40,44 @@
         "not": {"required": ["type"], "properties": {"type": {"const": "open_answer"}}}
       }
     },
-    "sections": {
-      "type": "array",
-      "minItems": 1,
-      "items": {"$ref": "#/$defs/section"}
-    },
+    "sections": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/section"}},
     "final": {
       "description": "The closed-book final quiz.",
       "type": "array",
       "minItems": 3,
       "items": {"$ref": "#/$defs/question"}
+    },
+    "kinds": {
+      "description": "Classes of view item, each drawn as a labelled chip. Needs schema_version 3.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "label", "colour"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "label": {"$ref": "#/$defs/text"},
+          "colour": {"enum": ["accent", "ok", "warn", "bad", "replay", "num", "fn", "muted"]}
+        }
+      }
+    },
+    "datasets": {
+      "description": "Recorded datasets under `.grokcheck/data/` that views draw. Needs schema_version 3.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "held_out": {
+            "description": "Rows only final and probe questions may show.",
+            "$ref": "#/$defs/selector"
+          }
+        }
+      }
     }
   },
-  "if": {
-    "required": ["plan"],
-    "properties": {"plan": {"required": ["time_budget"], "properties": {"time_budget": {"const": 5}}}}
-  },
-  "then": {"properties": {"sections": {"maxItems": 1}}},
   "$defs": {
     "plan": {
       "description": "Why the lesson is shaped as it is. Every `media` entry must be a type some section uses.",
@@ -65,19 +86,13 @@
       "additionalProperties": false,
       "properties": {
         "subject": {"enum": ["change", "area", "concept", "library", "options", "decision", "document"]},
-        "time_budget": {
-          "description": "Minutes; a 5-minute lesson has one section.",
-          "enum": [5, 15, 30]
-        },
+        "time_budget": {"description": "Minutes; a 5-minute lesson has one section.", "enum": [5, 15, 30]},
         "content": {
           "type": "array",
           "uniqueItems": true,
           "items": {"enum": ["structure", "behaviour", "change", "tests"]}
         },
-        "media": {
-          "description": "Element or question types the lesson uses.",
-          "$ref": "#/$defs/texts"
-        },
+        "media": {"description": "Element or question types the lesson uses.", "$ref": "#/$defs/texts"},
         "rejected": {
           "description": "Element or question types considered and left out.",
           "$ref": "#/$defs/texts"
@@ -90,19 +105,10 @@
         "default_depth": {"enum": ["short", "detail"]}
       }
     },
-    "text": {
-      "type": "string",
-      "pattern": "\\S"
-    },
-    "texts": {
-      "type": "array",
-      "items": {"$ref": "#/$defs/text"}
-    },
+    "text": {"type": "string", "pattern": "\\S"},
+    "texts": {"type": "array", "items": {"$ref": "#/$defs/text"}},
     "playground_outcome": {"enum": ["complete", "lost", "hang"]},
-    "identifier": {
-      "type": "string",
-      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
-    },
+    "identifier": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"},
     "section": {
       "type": "object",
       "required": ["id", "title", "body", "checkpoints"],
@@ -123,12 +129,7 @@
           "type": "array",
           "items": {"$ref": "#/$defs/element"}
         },
-        "checkpoints": {
-          "type": "array",
-          "minItems": 1,
-          "maxItems": 2,
-          "items": {"$ref": "#/$defs/question"}
-        }
+        "checkpoints": {"type": "array", "minItems": 1, "maxItems": 2, "items": {"$ref": "#/$defs/question"}}
       }
     },
     "depth": {
@@ -140,7 +141,22 @@
       "type": "object",
       "required": ["type"],
       "properties": {
-        "type": {"enum": ["prose", "code", "diff", "vocab", "trace", "spike", "playground", "diagram", "options", "assumptions", "video"]}
+        "type": {
+          "enum": [
+            "prose",
+            "code",
+            "diff",
+            "vocab",
+            "trace",
+            "spike",
+            "playground",
+            "diagram",
+            "options",
+            "assumptions",
+            "video",
+            "view"
+          ]
+        }
       },
       "allOf": [
         {
@@ -190,10 +206,7 @@
                   "type": "object",
                   "required": ["op", "text"],
                   "additionalProperties": false,
-                  "properties": {
-                    "op": {"enum": [" ", "+", "-"]},
-                    "text": {"type": "string"}
-                  }
+                  "properties": {"op": {"enum": [" ", "+", "-"]}, "text": {"type": "string"}}
                 }
               },
               "notes": {
@@ -269,7 +282,11 @@
               {"properties": {"terms": {"items": {"not": {"required": ["library_term"]}}}}}
             ],
             "if": {"not": {"required": ["owners"]}},
-            "then": {"properties": {"terms": {"items": {"properties": {"owner": {"enum": ["ours", "library", "stdlib"]}}}}}}
+            "then": {
+              "properties": {
+                "terms": {"items": {"properties": {"owner": {"enum": ["ours", "library", "stdlib"]}}}}
+              }
+            }
           }
         },
         {
@@ -593,6 +610,178 @@
               }
             }
           }
+        },
+        {
+          "if": {"required": ["type"], "properties": {"type": {"const": "view"}}},
+          "then": {
+            "description": "A picture drawn from a recorded dataset. Needs schema_version 3.",
+            "required": ["id", "layout", "caption"],
+            "additionalProperties": false,
+            "properties": {
+              "type": true,
+              "layout": {"enum": ["lanes", "table", "steps", "blocks", "decision"]},
+              "caption": {"description": "The question the picture answers.", "$ref": "#/$defs/text"},
+              "data": {"anyOf": [{"$ref": "#/$defs/identifier"}, {"type": "null"}]},
+              "where": {"$ref": "#/$defs/selector"},
+              "encode": {
+                "description": "Dataset fields per layout; see references/lesson-format.md.",
+                "type": "object"
+              },
+              "split": {"anyOf": [{"$ref": "#/$defs/text"}, {"type": "null"}]},
+              "missing": {"type": "string"},
+              "marks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["where", "text"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "where": {"$ref": "#/$defs/selector"},
+                    "text": {"$ref": "#/$defs/text"},
+                    "tone": {"enum": ["ok", "warn", "bad", "accent", "muted"]},
+                    "place": {"enum": ["column", "status"]}
+                  }
+                }
+              },
+              "layers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["id", "label", "fields"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {"$ref": "#/$defs/identifier"},
+                    "label": {"$ref": "#/$defs/text"},
+                    "fields": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/text"}},
+                    "where": {"$ref": "#/$defs/selector"},
+                    "on": {"type": "boolean"}
+                  }
+                }
+              },
+              "mask": {"anyOf": [{"$ref": "#/$defs/selector"}, {"type": "null"}]},
+              "fill": {"type": "array", "items": {"$ref": "#/$defs/text"}},
+              "presets": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["label", "values"],
+                  "additionalProperties": false,
+                  "properties": {"label": {"$ref": "#/$defs/text"}, "values": {"type": "object"}}
+                }
+              },
+              "tasks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["text", "when"],
+                  "additionalProperties": false,
+                  "properties": {"text": {"$ref": "#/$defs/text"}, "when": {"$ref": "#/$defs/selector"}}
+                }
+              },
+              "steps": {
+                "description": "An inline code walk: at most 6 lines per step, from one file.",
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": ["code", "note"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "object",
+                      "required": ["file", "lines"],
+                      "additionalProperties": false,
+                      "properties": {
+                        "file": {"$ref": "#/$defs/text"},
+                        "lines": {
+                          "anyOf": [
+                            {"$ref": "#/$defs/lines"},
+                            {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/lines"}}
+                          ]
+                        }
+                      }
+                    },
+                    "note": {"$ref": "#/$defs/text"},
+                    "link": {"type": "array", "items": {"$ref": "#/$defs/text"}},
+                    "verified": {"enum": ["supported", "unchecked"]}
+                  }
+                }
+              },
+              "nodes": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": ["id", "label", "kind", "code", "note"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {"$ref": "#/$defs/identifier"},
+                    "label": {"$ref": "#/$defs/text"},
+                    "kind": {"enum": ["check", "outcome"]},
+                    "code": {
+                      "type": "object",
+                      "required": ["file", "lines"],
+                      "additionalProperties": false,
+                      "properties": {"file": {"$ref": "#/$defs/text"}, "lines": {"$ref": "#/$defs/lines"}}
+                    },
+                    "yes": {
+                      "type": "object",
+                      "required": ["lines"],
+                      "additionalProperties": false,
+                      "properties": {"lines": {"$ref": "#/$defs/lines"}}
+                    },
+                    "note": {"$ref": "#/$defs/text"},
+                    "tone": {"enum": ["ok", "warn", "bad", "accent", "muted"]},
+                    "example": {"type": "object"},
+                    "verified": {"enum": ["supported", "unchecked"]}
+                  }
+                }
+              },
+              "depth": {"$ref": "#/$defs/depth"},
+              "claims": {"$ref": "#/$defs/claims"},
+              "id": {"$ref": "#/$defs/identifier"},
+              "gate": {"anyOf": [{"$ref": "#/$defs/identifier"}, {"type": "null"}]},
+              "notes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["where", "text"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "where": {"$ref": "#/$defs/selector"},
+                    "text": {"$ref": "#/$defs/text"},
+                    "verified": {"enum": ["supported", "unchecked"]}
+                  }
+                }
+              },
+              "inputs": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["field", "label", "control", "default"],
+                      "additionalProperties": false,
+                      "properties": {
+                        "field": {"$ref": "#/$defs/text"},
+                        "label": {"$ref": "#/$defs/text"},
+                        "control": {"enum": ["range", "toggle", "select"]},
+                        "default": {"type": ["string", "number", "boolean", "null"]},
+                        "follows": {"$ref": "#/$defs/text"},
+                        "hint": {"$ref": "#/$defs/text"}
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": ["from"],
+                    "additionalProperties": false,
+                    "properties": {"from": {"$ref": "#/$defs/identifier"}}
+                  }
+                ]
+              }
+            }
+          }
         }
       ]
     },
@@ -622,7 +811,7 @@
       }
     },
     "backing": {
-      "description": "Exactly one kind of evidence: project lines, an outside source, a spike, or none yet.",
+      "description": "Exactly one kind of evidence: project lines, an outside source, a spike, recorded rows, or none yet.",
       "oneOf": [
         {
           "type": "object",
@@ -631,10 +820,7 @@
           "properties": {
             "file": {"$ref": "#/$defs/text"},
             "lines": {"$ref": "#/$defs/lines"},
-            "symbol": {
-              "description": "A name that must appear in the cited lines.",
-              "$ref": "#/$defs/text"
-            },
+            "symbol": {"description": "A name that must appear in the cited lines.", "$ref": "#/$defs/text"},
             "quote": {
               "description": "Text that appears in the cited lines up to whitespace. Required when `file` is under `.grokcheck/sources/`.",
               "$ref": "#/$defs/text"
@@ -645,10 +831,7 @@
           "type": "object",
           "required": ["url", "version"],
           "additionalProperties": false,
-          "properties": {
-            "url": {"$ref": "#/$defs/text"},
-            "version": {"$ref": "#/$defs/text"}
-          }
+          "properties": {"url": {"$ref": "#/$defs/text"}, "version": {"$ref": "#/$defs/text"}}
         },
         {
           "type": "object",
@@ -661,6 +844,12 @@
           "required": ["reason"],
           "additionalProperties": false,
           "properties": {"reason": {"$ref": "#/$defs/text"}}
+        },
+        {
+          "type": "object",
+          "required": ["data", "rows"],
+          "additionalProperties": false,
+          "properties": {"data": {"$ref": "#/$defs/identifier"}, "rows": {"$ref": "#/$defs/selector"}}
         }
       ]
     },
@@ -680,10 +869,7 @@
       "else": {
         "required": ["language", "text"],
         "additionalProperties": false,
-        "properties": {
-          "language": {"$ref": "#/$defs/text"},
-          "text": {"$ref": "#/$defs/text"}
-        }
+        "properties": {"language": {"$ref": "#/$defs/text"}, "text": {"$ref": "#/$defs/text"}}
       }
     },
     "option": {
@@ -698,16 +884,8 @@
         }
       }
     },
-    "options": {
-      "type": "array",
-      "minItems": 2,
-      "items": {"$ref": "#/$defs/option"}
-    },
-    "optionIndex": {
-      "description": "A 0-based index into `options`.",
-      "type": "integer",
-      "minimum": 0
-    },
+    "options": {"type": "array", "minItems": 2, "items": {"$ref": "#/$defs/option"}},
+    "optionIndex": {"description": "A 0-based index into `options`.", "type": "integer", "minimum": 0},
     "blank": {
       "type": "object",
       "required": ["id", "accepted"],
@@ -747,7 +925,9 @@
             "mutation_quiz",
             "fix_the_bug",
             "change_impact",
-            "parsons"
+            "parsons",
+            "select_items",
+            "fill_table"
           ]
         }
       },
@@ -891,19 +1071,15 @@
                 "description": "Holds one `[[blank:<id>]]` marker per entry in `blanks`.",
                 "$ref": "#/$defs/text"
               },
-              "blanks": {
-                "type": "array",
-                "minItems": 1,
-                "items": {"$ref": "#/$defs/blank"}
-              }
+              "blanks": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/blank"}}
             }
           }
         },
         {
           "if": {"required": ["type"], "properties": {"type": {"const": "predict_state"}}},
           "then": {
-            "description": "Only as a checkpoint of the section holding trace `trace_id`; `version` and `step` are 0-based and must exist. Graded as `single_choice`.",
-            "required": ["trace_id", "version", "step", "options", "correct"],
+            "description": "A checkpoint of the section holding trace `trace_id` (with `version`), or steps view `view`. `version` and `step` are 0-based and must exist. Graded as `single_choice`.",
+            "required": ["step", "options", "correct"],
             "additionalProperties": false,
             "properties": {
               "id": {"$ref": "#/$defs/identifier"},
@@ -915,8 +1091,16 @@
               "version": {"type": "integer", "minimum": 0},
               "step": {"type": "integer", "minimum": 0},
               "options": {"$ref": "#/$defs/options"},
-              "correct": {"$ref": "#/$defs/optionIndex"}
-            }
+              "correct": {"$ref": "#/$defs/optionIndex"},
+              "view": {"$ref": "#/$defs/identifier"}
+            },
+            "oneOf": [
+              {"required": ["trace_id", "version"], "not": {"required": ["view"]}},
+              {
+                "required": ["view"],
+                "not": {"anyOf": [{"required": ["trace_id"]}, {"required": ["version"]}]}
+              }
+            ]
           }
         },
         {
@@ -940,16 +1124,10 @@
                   "type": "object",
                   "required": ["name", "fails"],
                   "additionalProperties": false,
-                  "properties": {
-                    "name": {"$ref": "#/$defs/text"},
-                    "fails": {"type": "boolean"}
-                  }
+                  "properties": {"name": {"$ref": "#/$defs/text"}, "fails": {"type": "boolean"}}
                 }
               },
-              "log": {
-                "description": "The tail of the mutant run's output.",
-                "$ref": "#/$defs/text"
-              }
+              "log": {"description": "The tail of the mutant run's output.", "$ref": "#/$defs/text"}
             }
           }
         },
@@ -1032,8 +1210,189 @@
               }
             }
           }
+        },
+        {
+          "if": {"required": ["type"], "properties": {"type": {"const": "select_items"}}},
+          "then": {
+            "description": "Pick the view items that `answer` matches.",
+            "required": ["view", "answer"],
+            "additionalProperties": false,
+            "properties": {
+              "id": {"$ref": "#/$defs/identifier"},
+              "type": true,
+              "prompt": {"$ref": "#/$defs/text"},
+              "explanation": {"$ref": "#/$defs/text"},
+              "view": {
+                "description": "A view id of this section in a checkpoint; an inline view in a final or probe question.",
+                "anyOf": [{"$ref": "#/$defs/identifier"}, {"$ref": "#/$defs/inlineView"}]
+              },
+              "answer": {"$ref": "#/$defs/selector"}
+            }
+          }
+        },
+        {
+          "if": {"required": ["type"], "properties": {"type": {"const": "fill_table"}}},
+          "then": {
+            "description": "Fill the masked cells of a table view.",
+            "required": ["view"],
+            "additionalProperties": false,
+            "properties": {
+              "id": {"$ref": "#/$defs/identifier"},
+              "type": true,
+              "prompt": {"$ref": "#/$defs/text"},
+              "explanation": {"$ref": "#/$defs/text"},
+              "view": {
+                "description": "A view id of this section in a checkpoint; an inline view in a final or probe question.",
+                "anyOf": [{"$ref": "#/$defs/identifier"}, {"$ref": "#/$defs/inlineView"}]
+              }
+            }
+          }
         }
       ]
+    },
+    "selector": {
+      "description": "A row or item selector: field to value, list of values, or range object, combined with `and`, `or` and `not`.",
+      "type": "object"
+    },
+    "inlineView": {
+      "description": "A view inside a final or probe question: no id, gate, inputs, notes, claims or depth.",
+      "type": "object",
+      "required": ["type", "layout", "caption"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {"const": "view"},
+        "layout": {"enum": ["lanes", "table", "steps", "blocks", "decision"]},
+        "caption": {"description": "The question the picture answers.", "$ref": "#/$defs/text"},
+        "data": {"anyOf": [{"$ref": "#/$defs/identifier"}, {"type": "null"}]},
+        "where": {"$ref": "#/$defs/selector"},
+        "encode": {
+          "description": "Dataset fields per layout; see references/lesson-format.md.",
+          "type": "object"
+        },
+        "split": {"anyOf": [{"$ref": "#/$defs/text"}, {"type": "null"}]},
+        "missing": {"type": "string"},
+        "marks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["where", "text"],
+            "additionalProperties": false,
+            "properties": {
+              "where": {"$ref": "#/$defs/selector"},
+              "text": {"$ref": "#/$defs/text"},
+              "tone": {"enum": ["ok", "warn", "bad", "accent", "muted"]},
+              "place": {"enum": ["column", "status"]}
+            }
+          }
+        },
+        "layers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "label", "fields"],
+            "additionalProperties": false,
+            "properties": {
+              "id": {"$ref": "#/$defs/identifier"},
+              "label": {"$ref": "#/$defs/text"},
+              "fields": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/text"}},
+              "where": {"$ref": "#/$defs/selector"},
+              "on": {"type": "boolean"}
+            }
+          }
+        },
+        "mask": {"anyOf": [{"$ref": "#/$defs/selector"}, {"type": "null"}]},
+        "fill": {"type": "array", "items": {"$ref": "#/$defs/text"}},
+        "presets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["label", "values"],
+            "additionalProperties": false,
+            "properties": {"label": {"$ref": "#/$defs/text"}, "values": {"type": "object"}}
+          }
+        },
+        "tasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["text", "when"],
+            "additionalProperties": false,
+            "properties": {"text": {"$ref": "#/$defs/text"}, "when": {"$ref": "#/$defs/selector"}}
+          }
+        },
+        "steps": {
+          "description": "An inline code walk: at most 6 lines per step, from one file.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["code", "note"],
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "type": "object",
+                "required": ["file", "lines"],
+                "additionalProperties": false,
+                "properties": {
+                  "file": {"$ref": "#/$defs/text"},
+                  "lines": {
+                    "anyOf": [
+                      {"$ref": "#/$defs/lines"},
+                      {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/lines"}}
+                    ]
+                  }
+                }
+              },
+              "note": {"$ref": "#/$defs/text"},
+              "link": {"type": "array", "items": {"$ref": "#/$defs/text"}},
+              "verified": {"enum": ["supported", "unchecked"]}
+            }
+          }
+        },
+        "nodes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["id", "label", "kind", "code", "note"],
+            "additionalProperties": false,
+            "properties": {
+              "id": {"$ref": "#/$defs/identifier"},
+              "label": {"$ref": "#/$defs/text"},
+              "kind": {"enum": ["check", "outcome"]},
+              "code": {
+                "type": "object",
+                "required": ["file", "lines"],
+                "additionalProperties": false,
+                "properties": {"file": {"$ref": "#/$defs/text"}, "lines": {"$ref": "#/$defs/lines"}}
+              },
+              "yes": {
+                "type": "object",
+                "required": ["lines"],
+                "additionalProperties": false,
+                "properties": {"lines": {"$ref": "#/$defs/lines"}}
+              },
+              "note": {"$ref": "#/$defs/text"},
+              "tone": {"enum": ["ok", "warn", "bad", "accent", "muted"]},
+              "example": {"type": "object"},
+              "verified": {"enum": ["supported", "unchecked"]}
+            }
+          }
+        }
+      }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["plan"],
+        "properties": {"plan": {"required": ["time_budget"], "properties": {"time_budget": {"const": 5}}}}
+      },
+      "then": {"properties": {"sections": {"maxItems": 1}}}
+    },
+    {
+      "if": {"properties": {"schema_version": {"const": 2}}},
+      "then": {"properties": {"kinds": false, "datasets": false}}
+    }
+  ]
 }

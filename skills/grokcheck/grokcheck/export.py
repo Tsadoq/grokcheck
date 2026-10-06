@@ -21,10 +21,13 @@ from typing import TYPE_CHECKING, Literal
 from grokcheck.lesson import (
     AssumptionsElement,
     ChangeImpact,
+    CodeBlock,
     CodeElement,
+    DataBacking,
     DiagramElement,
     DiffElement,
     FillBlank,
+    FillTable,
     FixTheBug,
     LinesBacking,
     MultipleChoice,
@@ -39,12 +42,14 @@ from grokcheck.lesson import (
     PlaygroundElement,
     PredictOutput,
     ProseElement,
+    SelectItems,
     SingleChoice,
     SourceBacking,
     SpikeBacking,
     SpikeElement,
     TraceElement,
     VideoElement,
+    ViewElement,
     VocabElement,
 )
 from grokcheck.schedule import local_today, missed
@@ -57,7 +62,6 @@ if TYPE_CHECKING:
     from grokcheck.lesson import (
         Backing,
         Claim,
-        CodeBlock,
         Element,
         Lesson,
         Option,
@@ -308,6 +312,78 @@ def _vocab(element: VocabElement) -> str:
     return "\n".join(rows)
 
 
+_MAX_VIEW_ROWS = 50
+
+
+def _view(element: ViewElement) -> list[str]:
+    """Render steps as code and a note each, any other layout as a table of items."""
+    blocks = [f"**{element.caption}**"]
+    if element.layout == "steps":
+        for number, step in enumerate(element.steps, start=1):
+            code = "\n\n".join(
+                _code(
+                    CodeBlock(
+                        step.code.language, span.text, step.code.file, span.start_line
+                    )
+                )
+                for span in step.code.spans
+            )
+            shown = ", ".join(f"`{k}` = `{v}`" for k, v in step.show.items())
+            notes = " ".join(text for text in (step.note, shown) if text)
+            blocks.append(
+                f"{number}. {notes}\n\n{code}" if notes else f"{number}.\n\n{code}"
+            )
+        return blocks
+    if element.layout == "decision":
+        blocks.append(
+            "\n".join(
+                f"- **{node.label}** ({node.kind}, `{node.code.file}`"
+                f" lines {node.lines[0]}-{node.lines[1]}): {node.note}"
+                for node in element.nodes
+            )
+        )
+    else:
+        blocks.append(_items_table(element))
+    if element.notes:
+        blocks.append("\n".join(f"- {note.text}" for note in element.notes))
+    return blocks
+
+
+def _items_table(element: ViewElement) -> str:
+    encode = element.encode
+    columns = encode.get("columns")
+    if isinstance(columns, list):
+        fields = [
+            (str(c.get("field")), str(c.get("label")))
+            for c in columns
+            if isinstance(c, dict)
+        ]
+    else:
+        names = ("lane", "x", "key", "label", "class", "group")
+        fields = [
+            (str(encode[name]), str(encode[name]))
+            for name in names
+            if isinstance(encode.get(name), str)
+        ]
+    if element.split:
+        fields.insert(0, (element.split, element.split))
+    fields = list(dict.fromkeys(fields))
+    flags = [("_lost", "lost"), ("_dup", "repeat")]
+    rows = [
+        "| " + " | ".join(label for _, label in fields) + " | |",
+        "|" + " --- |" * (len(fields) + 1),
+    ]
+    for item in element.items[:_MAX_VIEW_ROWS]:
+        marks = ", ".join(word for flag, word in flags if item.get(flag))
+        cells = [str(item.get(name, "")) for name, _ in fields]
+        line = " | ".join(c.replace("|", "\\|") for c in (*cells, marks))
+        rows.append("| " + line.replace("\n", " ") + " |")
+    extra = len(element.items) - _MAX_VIEW_ROWS
+    if extra > 0:
+        rows.append(f"\n_{extra} more rows not shown._")
+    return "\n".join(rows)
+
+
 _ELEMENT_RENDERERS: dict[type, Callable[[Any], list[str]]] = {
     CodeElement: _code_element,
     DiffElement: _diff,
@@ -320,6 +396,7 @@ _ELEMENT_RENDERERS: dict[type, Callable[[Any], list[str]]] = {
     DiagramElement: _diagram,
     ProseElement: _prose,
     VideoElement: _video,
+    ViewElement: _view,
 }
 
 
@@ -344,6 +421,8 @@ def _cite(backing: Backing) -> str:
             return f"[{url} @ {version}]"
         case SpikeBacking(spike_id=spike_id):
             return f"[spike {spike_id}]"
+        case DataBacking(data=data):
+            return f"[recorded data {data}]"
     return f"[unverified: {backing.reason}]"
 
 
@@ -361,6 +440,9 @@ def _final_question(number: int, question: Question, grade: Grade | None) -> lis
         blocks.append(_fence(question.text, question.language))
     elif isinstance(question, (MutationQuiz, FixTheBug)):
         blocks.extend(_mutation(question))
+    elif isinstance(question, (SelectItems, FillTable)):
+        if question.frame:
+            blocks.append(f"**{question.frame.get('caption')}**")
     elif not isinstance(question, Parsons) and question.code:
         blocks.append(_code(question.code))
     if isinstance(question, ChangeImpact):
@@ -381,7 +463,7 @@ def _final_question(number: int, question: Question, grade: Grade | None) -> lis
     return blocks
 
 
-def _answer(question: Question, response: Response) -> str:  # noqa: C901, PLR0911
+def _answer(question: Question, response: Response) -> str:  # noqa: C901, PLR0911, PLR0912
     """Show `response` in the reader's terms: option and step text, not indexes."""
     match question, response:
         case (SingleChoice(options=options) | PredictOutput(options=options), int()):
@@ -402,6 +484,15 @@ def _answer(question: Question, response: Response) -> str:  # noqa: C901, PLR09
             return "tests pass" if response.get("passed") else "tests still fail"
         case ChangeImpact(candidates=candidates), list():
             return "; ".join(_option(candidates, item) for item in response)
+        case SelectItems(), list():
+            return "picked " + (", ".join(f"`{cell}`" for cell in response) or "none")
+        case FillTable(), dict():
+            return "; ".join(
+                f"`{cell}` {name} = `{value}`"
+                for cell, row in response.items()
+                if isinstance(row, dict)
+                for name, value in row.items()
+            )
         case Parsons(), list():
             placed = [
                 ParsonsLine(str(item.get("text", "")), indent)
@@ -561,7 +652,7 @@ def _anki_front(question: Question) -> str:
     return f"{front}<br>{_anki_pre(code.text)}" if code else front
 
 
-def _anki_key(question: Question) -> str:  # noqa: PLR0911
+def _anki_key(question: Question) -> str:  # noqa: C901, PLR0911
     """Return the answer to a question that has no options, as plain text."""
     match question:
         case PredictOutput(accepted=accepted) if accepted:
@@ -583,6 +674,14 @@ def _anki_key(question: Question) -> str:  # noqa: PLR0911
             )
         case Parsons(lines=lines):
             return _parsons_text(lines)
+        case SelectItems(answer_cells=cells):
+            return "Cells: " + ", ".join(cells)
+        case FillTable(cells=cells):
+            return "\n".join(
+                f"{cell} {name} = {value}"
+                for cell, row in cells.items()
+                for name, value in row.items()
+            )
     return ""
 
 

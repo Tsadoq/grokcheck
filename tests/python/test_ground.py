@@ -1,9 +1,12 @@
 """The grounding pass: the evidence a subagent sees, and its verdicts written back."""
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
+from grokcheck import data
+from grokcheck.data import DataError
 from grokcheck.ground import apply_verdicts, manifest
 from grokcheck.lesson import LessonError, load_lesson
 
@@ -121,3 +124,61 @@ def test_assumption_backing_is_grounded_and_refuted_like_a_claim(
     paths = [problem.path for problem in caught.value.problems]
     if paths != ["sections[0].elements[0].items[0].verified"]:
         pytest.fail(f"problem paths are {paths}")
+
+
+def _views_project(tmp_path: Path) -> Path:
+    fixtures = Path(__file__).parents[1] / "fixtures"
+    project = tmp_path / "project"
+    shutil.copytree(fixtures / "project", project)
+    shutil.copy(fixtures / "lessons" / "valid_views.json", project / "lesson.json")
+    return project
+
+
+def test_manifest_shows_data_evidence_and_authored_rows(tmp_path: Path) -> None:
+    """A view note is judged on its matched items; authored rows on their cites."""
+    project = _views_project(tmp_path)
+
+    entries = {
+        e["claim_id"]: e
+        for e in manifest(load_lesson(project / "lesson.json", project), project)
+    }
+
+    notes = [e for key, e in entries.items() if ".notes[" in key]
+    if not notes:
+        pytest.fail("no view note in the manifest")
+    evidence = notes[0]["evidence"]
+    if evidence["source"]["kind"] != "run" or evidence["source"]["cited_lines_run"] < 1:
+        pytest.fail(f"evidence source is {evidence['source']}")
+    if not evidence["matched"] or not all("_cell" in row for row in evidence["rows"]):
+        pytest.fail(f"evidence rows are not the view's items: {evidence['rows'][:2]}")
+    row = entries.get("data:terms.rows[1]")
+    if row is None or "raise Beyond(cursor)" not in row["evidence"]:
+        pytest.fail(f"authored row entry is {row}")
+    if not row["text"].startswith("term=Beyond"):
+        pytest.fail(f"authored row text is {row['text']!r}")
+
+
+def test_row_verdicts_go_into_the_data_file(tmp_path: Path) -> None:
+    """An authored row's verdict is kept in its dataset; contradicted refuses it."""
+    project = _views_project(tmp_path)
+    lesson_file = project / "lesson.json"
+
+    apply_verdicts(
+        lesson_file,
+        [{"claim_id": "data:terms.rows[1]", "verdict": "contradicted"}],
+        project,
+    )
+
+    path = project / ".grokcheck" / "data" / "terms.json"
+    if json.loads(path.read_text("utf-8"))["source"]["verdicts"] != {
+        "1": "contradicted"
+    }:
+        pytest.fail("the verdict did not reach the data file")
+    with pytest.raises(DataError, match="contradicted"):
+        data.load(project, "terms")
+    with pytest.raises(LessonError):
+        apply_verdicts(
+            lesson_file,
+            [{"claim_id": "data:terms.rows[9]", "verdict": "supported"}],
+            project,
+        )

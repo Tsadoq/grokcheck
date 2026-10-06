@@ -53,7 +53,7 @@ globalThis.document = {
 };
 globalThis.hljs = { getLanguage: () => false };
 
-const { renderElements } = await import("../../skills/grokcheck/web/elements.js");
+const { ELEMENT_RENDERERS, gatesSection, renderElements } = await import("../../skills/grokcheck/web/elements.js");
 
 test("renders prose and code elements in authored order with depth markers", () => {
   const section = {
@@ -169,4 +169,12 @@ test("vocab element tags each term with its owner", () => {
   const row = renderElements(section).children[0].querySelector(".term");
 
   assert.match(row.querySelector(".owner").className, /\blibrary\b/, "the term row should carry an owner tag classed by its owner");
+});
+
+test("a view is an element, and gates its section only when it has tasks", () => {
+  assert.equal(typeof ELEMENT_RENDERERS.view, "function");
+  assert.equal(gatesSection({ type: "view", tasks: [{ text: "t", when: {} }] }), true);
+  assert.equal(gatesSection({ type: "view", tasks: [] }), false);
+  assert.equal(gatesSection({ type: "view", tasks: [{ text: "t", when: {} }], depth: "detail" }), false);
+  assert.equal(gatesSection({ type: "playground" }), true);
 });

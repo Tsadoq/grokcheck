@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-10-06
+
+### Added
+
+- The `view` element draws recorded rows in one of five layouts: `lanes` (events per lane over time, with lost, repeated and stacked events computed), `table`, `steps` (a code walk of at most 6 lines per step, or a step per recorded line event), `blocks` and `decision` (the path each recorded run took through the cited checks). A view can split into panes to compare two versions, vary its scenario with inputs and presets, set tasks, and link to the other views of its section.
+- Two question types answered on a view: `select_items` (click the cells that match) and `fill_table` (fill the hidden cells of a table). A varied case stays masked until its checkpoint is answered, and `predict_state` can gate a steps view.
+- Finals can draw rows held out of the sections (transfer items) and a deliberately wrong copy of a dataset (find the wrong item).
+- Lint for code-first sections, long code and diff hunks, crowded views, a masked first case, extra or authored datasets without a reason, stale datasets and finals without transfer or wrong-data items.
+- `results.json` counts answers per element type in `by_element`.
+- Recorded datasets: `grokcheck record <driver> --matrix ...` runs a driver script once per input combination, each in a fresh process, and keeps every row it emits with the cited lines that run executed, the commit and the hashes of the driver and the cited files, in `.grokcheck/data/<id>.json`. `--python` runs the driver under another interpreter, such as the project's own virtual environment, without installing grokcheck there. `record --from-trace` turns a recorded trace into rows.
+- `grokcheck data show`, `data author` and `data wrong`: summarise a dataset, write rows by hand with a cited span for each, and copy a dataset with deliberate errors for the final quiz.
+- Datasets are refused when a run emitted rows without executing a cited line inside a function, when a hand-written row lacks a valid citation or was contradicted, or when a wrong copy no longer matches its original.
+- A JSON selector grammar for picking rows and view items, with test vectors shared by the Python and browser implementations.
+- Grounding covers recorded rows: a claim can be backed by the rows a selector matches, and each hand-written row is checked like a cited claim, its verdict kept in the data file.
+- `grokcheck refresh` lists declared datasets whose cited files or driver changed.
+
+### Changed
+
+- Lesson schema version 3 adds `kinds`, `datasets` and the view element; version 2 lessons load unchanged.
+- The `no_vocab` lint is now `no_names_first`: a vocabulary element, or a blocks or table view, in the first section satisfies it.
+
 ## [0.3.0] - 2026-10-06
 
 ### Added
@@ -58,5 +79,6 @@ All notable changes to this project are documented here. The format follows [Kee
 - Markdown export of each finished lesson, stored next to the code under `.grokcheck/lessons/`.
 - `SKILL.md`, an authoring guide, a lesson format reference and an example lesson.
 
+[0.4.0]: https://github.com/Tsadoq/grokcheck/releases/tag/v0.4.0
 [0.2.0]: https://github.com/Tsadoq/grokcheck/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Tsadoq/grokcheck/releases/tag/v0.1.0

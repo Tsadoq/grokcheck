@@ -16,19 +16,25 @@ from typing import TYPE_CHECKING
 from grokcheck.lesson import (
     CodeElement,
     DiagramElement,
+    DiffElement,
     MultipleChoice,
     OpenAnswer,
+    PlaygroundElement,
     PredictOutput,
     PredictState,
     ProseElement,
+    SelectItems,
     SingleChoice,
+    TraceElement,
+    ViewElement,
     VocabElement,
 )
+from grokcheck.selector import matches
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from grokcheck.lesson import Lesson, Question
+    from grokcheck.lesson import Element, Lesson, Question, Section
 
 _CODE_SPAN = re.compile(r"`[^`]*`")
 _EMPHASIS = re.compile(r"(\*\*?|__?)[^*_]+?\1")
@@ -51,6 +57,12 @@ _BANNED = re.compile(
     re.IGNORECASE,
 )
 _TIME_REASON = re.compile(r"minute|time|budget|too long|cost|effort", re.IGNORECASE)
+_MAX_CODE_LINES = 12
+_MAX_HUNK_LINES = 20
+_MAX_LANES = 4
+_MAX_X = 12
+_MAX_TABLE_ROWS = 10
+_MAX_TABLE_COLUMNS = 5
 _MAX_SENTENCE_WORDS = 25
 _MAX_INTRO_SENTENCES = 12
 _ACTION_STARTS = frozenset(
@@ -246,8 +258,9 @@ def intro(lesson: Lesson) -> list[LintWarning]:
 
 def media(lesson: Lesson) -> list[LintWarning]:
     """Return a warning for every place `lesson` shows an idea through prose alone."""
-    warnings: list[LintWarning] = []
+    warnings = data_media(lesson)
     for i, section in enumerate(lesson.sections):
+        warnings.extend(_section_media(i, section))
         short = [e for e in section.elements if e.depth != "detail"]
         if all(isinstance(e, (ProseElement, CodeElement)) for e in short):
             warnings.append(
@@ -284,17 +297,223 @@ def media(lesson: Lesson) -> list[LintWarning]:
                 "the code cannot run in isolation",
             )
         )
-    if plan.subject in {"area", "decision"} and not any(
-        isinstance(e, VocabElement) for s in lesson.sections for e in s.elements
+    if plan.subject in {"area", "decision"} and not _names_first(lesson):
+        warnings.append(
+            LintWarning(
+                "sections[0]",
+                "no_names_first",
+                f"an {plan.subject} lesson needs a vocab element, or a short blocks or"
+                " table view, in its first section",
+            )
+        )
+    warnings.extend(_rejected_for_time(plan.rejected, plan.rationale))
+    return warnings
+
+
+def _views(lesson: Lesson) -> Iterator[tuple[str, ViewElement]]:
+    for i, section in enumerate(lesson.sections):
+        for j, element in enumerate(section.elements):
+            if isinstance(element, ViewElement):
+                yield f"sections[{i}].elements[{j - section.code_sugar}]", element
+
+
+def _element_path(i: int, section: Section, j: int) -> str:
+    if section.code_sugar and j == 0:
+        return f"sections[{i}].code"
+    return f"sections[{i}].elements[{j - section.code_sugar}]"
+
+
+def _section_media(i: int, section: Section) -> Iterator[LintWarning]:
+    short = [e for e in section.elements if e.depth != "detail"]
+    if short and isinstance(short[0], (CodeElement, DiffElement)):
+        yield LintWarning(
+            f"sections[{i}]",
+            "code_first",
+            "open the section with a picture or prose, not code",
+        )
+    if sum(_heavy(e) for e in short) > 1:
+        yield LintWarning(
+            f"sections[{i}]",
+            "heavy_elements",
+            "the short view has more than one heavy element; move one to detail",
+        )
+    for j, element in enumerate(section.elements):
+        path = _element_path(i, section, j)
+        if isinstance(element, CodeElement):
+            count = len(element.code.text.splitlines())
+            if count > _MAX_CODE_LINES:
+                yield LintWarning(
+                    path,
+                    "code_too_long",
+                    f"{count} lines of code, over {_MAX_CODE_LINES}",
+                )
+        if isinstance(element, DiffElement) and len(element.lines) > _MAX_HUNK_LINES:
+            yield LintWarning(
+                path,
+                "code_too_long",
+                f"a hunk of {len(element.lines)} lines, over {_MAX_HUNK_LINES}",
+            )
+        if isinstance(element, ViewElement) and element.depth != "detail":
+            message = _too_wide(element)
+            if message:
+                yield LintWarning(path, "view_too_wide", message)
+
+
+def _heavy(element: Element) -> bool:
+    if isinstance(element, ViewElement):
+        return bool(element.inputs) or element.layout == "steps"
+    return isinstance(element, (TraceElement, PlaygroundElement))
+
+
+def _too_wide(view: ViewElement) -> str | None:
+    groups: dict[tuple[object, ...], list[dict[str, object]]] = {}
+    for item in view.items:
+        key = (*(str(item.get(n)) for n in view.matrix), str(item.get("_pane")))
+        groups.setdefault(key, []).append(item)
+    if view.layout == "lanes":
+        lane, x = str(view.encode.get("lane")), str(view.encode.get("x"))
+        for items in groups.values():
+            lanes = {str(i.get(lane)) for i in items}
+            xs = {str(i.get(x)) for i in items}
+            if len(lanes) > _MAX_LANES or len(xs) > _MAX_X:
+                return (
+                    f"{len(lanes)} lanes and {len(xs)} columns; keep to"
+                    f" {_MAX_LANES} lanes and {_MAX_X} columns"
+                )
+    if view.layout == "table":
+        columns = view.encode.get("columns")
+        width = len(columns) if isinstance(columns, list) else 0
+        rows = max((len(items) for items in groups.values()), default=0)
+        if rows > _MAX_TABLE_ROWS or width > _MAX_TABLE_COLUMNS:
+            return (
+                f"{rows} rows and {width} columns; keep to {_MAX_TABLE_ROWS} rows"
+                f" and {_MAX_TABLE_COLUMNS} columns"
+            )
+    return None
+
+
+def _names_first(lesson: Lesson) -> bool:
+    first = lesson.sections[0].elements if lesson.sections else ()
+    return any(
+        isinstance(e, VocabElement)
+        or (
+            isinstance(e, ViewElement)
+            and e.depth != "detail"
+            and e.layout in {"blocks", "table"}
+        )
+        for e in first
+    )
+
+
+def _rejected_for_time(
+    rejected: tuple[str, ...], rationale: tuple[str, ...]
+) -> Iterator[LintWarning]:
+    for index, medium in enumerate(rejected):
+        if medium == "trace":
+            continue
+        naming = [line for line in rationale if _names(line, medium)]
+        if naming and all(_TIME_REASON.search(line) for line in naming):
+            yield LintWarning(
+                f"plan.rejected[{index}]",
+                "rejected_for_time",
+                f"'{medium}' is rejected for time alone; parallel subagents make it"
+                " cheap, so give a reason the medium does not fit",
+            )
+
+
+def _names(line: str, name: str) -> bool:
+    return (
+        re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", line, re.IGNORECASE)
+        is not None
+    )
+
+
+def data_media(lesson: Lesson) -> list[LintWarning]:
+    """Return a warning for every place `lesson`'s views and datasets break a rule."""
+    if not lesson.datasets:
+        return []
+    warnings: list[LintWarning] = []
+    rationale = lesson.plan.rationale if lesson.plan else ()
+    first: dict[str, tuple[str, ViewElement]] = {}
+    for path, view in _views(lesson):
+        if view.data:
+            first.setdefault(view.data, (path, view))
+    warnings.extend(
+        LintWarning(path, "first_case_masked", "show the first case whole: ungate it")
+        for path, view in first.values()
+        if view.gate is not None
+    )
+    sources = {use.id: use.source for use in lesson.datasets}
+    recorded = [d for d in first if sources.get(d) in {"run", "trace"}]
+    warnings.extend(
+        LintWarning(
+            "plan.rationale",
+            "many_datasets",
+            f"views draw dataset '{extra}' beside '{recorded[0]}'; say in the"
+            " rationale why one running example is not enough",
+        )
+        for extra in recorded[1:]
+        if not any(_names(line, extra) for line in rationale)
+    )
+    for index, use in enumerate(lesson.datasets):
+        if use.source == "authored" and not any(
+            _names(line, use.id) and not _TIME_REASON.search(line) for line in rationale
+        ):
+            warnings.append(
+                LintWarning(
+                    f"datasets[{index}]",
+                    "authored_data",
+                    f"'{use.id}' is typed by hand; name it in the rationale with the"
+                    " reason a driver cannot record it",
+                )
+            )
+        if use.stale:
+            warnings.append(
+                LintWarning(
+                    f"datasets[{index}]",
+                    "stale_data",
+                    f"'{use.id}' was recorded before {', '.join(use.stale)} changed;"
+                    " record it again",
+                )
+            )
+    if not any(_transfer(lesson, q) for q in lesson.final):
+        warnings.append(
+            LintWarning(
+                "final",
+                "final_transfer_missing",
+                "add a final question whose inline view draws only held-out rows",
+            )
+        )
+    if not any(
+        isinstance(q, SelectItems)
+        and q.frame is not None
+        and sources.get(str(q.frame.get("data"))) == "wrong"
+        for q in lesson.final
     ):
         warnings.append(
             LintWarning(
-                "$",
-                "no_vocab",
-                f"an {plan.subject} lesson needs a vocab element for its names",
+                "final",
+                "final_wrong_data_missing",
+                "add a final select_items over a wrong copy of a dataset",
             )
         )
     return warnings
+
+
+def _transfer(lesson: Lesson, question: Question) -> bool:
+    frame = getattr(question, "frame", None)
+    if not isinstance(frame, dict):
+        return False
+    held_out = next(
+        (use.held_out for use in lesson.datasets if use.id == frame.get("data")), None
+    )
+    items = frame.get("items")
+    return (
+        held_out is not None
+        and isinstance(items, list)
+        and bool(items)
+        and all(isinstance(i, dict) and matches(held_out, i) for i in items)
+    )
 
 
 def _trace_explained(rationale: tuple[str, ...]) -> bool:

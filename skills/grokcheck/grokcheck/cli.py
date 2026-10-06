@@ -24,7 +24,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NoReturn, get_args
 
-from grokcheck import diagrams
+from grokcheck import data, diagrams
 from grokcheck.client import ApiError, LessonClient, ServerGoneError
 from grokcheck.diffs import as_json, hunks
 from grokcheck.export import render_anki, render_obsidian
@@ -87,6 +87,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         output = command(args)
     except CliError as error:
         _print({"ok": False, "error": str(error), **error.details})
+        return 1
+    except data.DataError as error:
+        problems = [{"path": p, "message": m} for p, m in error.problems]
+        _print({"ok": False, "error": "the dataset was refused", "problems": problems})
         return 1
     except (LessonError, RunError, ApiError, ServerGoneError, OSError) as error:
         _print({"ok": False, "error": str(error)})
@@ -169,6 +173,8 @@ def _parser() -> _Parser:  # noqa: PLR0915
 
     _add_trace(commands)
 
+    _add_data(commands)
+
     _add_spike(commands)
 
     _add_mutate(commands)
@@ -207,6 +213,82 @@ def _add_trace(commands: argparse._SubParsersAction[_Parser]) -> None:
     trace_record.add_argument("--max-events", type=int, default=DEFAULT_MAX_EVENTS)
     _add_project(trace_record)
     trace_record.set_defaults(command=_trace_record)
+
+
+def _add_data(commands: argparse._SubParsersAction[_Parser]) -> None:
+    rec = commands.add_parser("record", help="record a driver's rows as a dataset")
+    rec.add_argument("driver", type=Path, nargs="?")
+    rec.add_argument("--from-trace", type=Path)
+    rec.add_argument("--id", required=True)
+    rec.add_argument("--cite", nargs="+", default=[])
+    rec.add_argument(
+        "--matrix", nargs="+", action="extend", default=[], metavar="NAME=VALUES"
+    )
+    rec.add_argument("--entry")
+    rec.add_argument("--timeout", type=float, default=data.DEFAULT_TIMEOUT)
+    rec.add_argument("--python", metavar="INTERPRETER")
+    _add_project(rec)
+    rec.set_defaults(command=_record)
+
+    data_parser = commands.add_parser("data", help="show, author or corrupt datasets")
+    data_commands = data_parser.add_subparsers(required=True, metavar="command")
+    show = data_commands.add_parser("show", help="summarise a dataset")
+    show.add_argument("dataset_id")
+    show.add_argument("--where", type=_json_object, default={})
+    show.add_argument("--limit", type=int, default=5)
+    _add_project(show)
+    show.set_defaults(
+        command=lambda a: data.show(a.project, a.dataset_id, a.where, a.limit)
+    )
+    author = data_commands.add_parser("author", help="write rows typed by hand")
+    author.add_argument("dataset_id")
+    author.add_argument("--file", type=Path, required=True)
+    author.add_argument("--reason", required=True)
+    _add_project(author)
+    author.set_defaults(
+        command=lambda a: data.author(a.project, a.dataset_id, a.file, a.reason)
+    )
+    wrong = data_commands.add_parser("wrong", help="copy a dataset with edits")
+    wrong.add_argument("dataset_id")
+    wrong.add_argument("--out", required=True)
+    wrong.add_argument(
+        "--edit", nargs=2, action="append", required=True, metavar=("SELECTOR", "F=V")
+    )
+    _add_project(wrong)
+    wrong.set_defaults(
+        command=lambda a: data.wrong(a.project, a.dataset_id, a.out, a.edit)
+    )
+
+
+def _json_object(text: str) -> dict[str, object]:
+    try:
+        value = json.loads(text)
+    except json.JSONDecodeError as error:
+        msg = f"'{text}' is not JSON: {error}"
+        raise argparse.ArgumentTypeError(msg) from error
+    if not isinstance(value, dict):
+        msg = f"'{text}' must be a JSON object"
+        raise argparse.ArgumentTypeError(msg)
+    return value
+
+
+def _record(args: argparse.Namespace) -> dict[str, Any]:
+    """Record a driver over the matrix, or flatten `--from-trace` into rows."""
+    if (args.driver is None) == (args.from_trace is None):
+        msg = "record needs either <driver.py> or --from-trace <trace.json>"
+        raise CliError(msg)
+    if args.from_trace is not None:
+        return data.from_trace(args.project, args.from_trace, args.id)
+    return data.record(
+        args.project,
+        args.driver,
+        args.id,
+        args.cite,
+        matrix=data.parse_matrix(args.matrix),
+        entry=args.entry,
+        timeout=args.timeout,
+        python=args.python,
+    )
 
 
 def _add_spike(commands: argparse._SubParsersAction[_Parser]) -> None:
@@ -437,7 +519,7 @@ def _ground(args: argparse.Namespace) -> dict[str, Any]:
     if not isinstance(verdicts, list) or not all(isinstance(v, dict) for v in verdicts):
         msg = "the verdicts file must hold a list of objects"
         raise CliError(msg)
-    apply_verdicts(args.lesson, verdicts)
+    apply_verdicts(args.lesson, verdicts, args.project)
     counts = dict.fromkeys(("supported", "contradicted", "unchecked"), 0)
     for verdict in verdicts:
         counts[VERDICTS[verdict["verdict"]]] += 1

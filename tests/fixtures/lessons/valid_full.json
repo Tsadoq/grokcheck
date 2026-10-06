@@ -36,7 +36,6 @@
       "id": "purpose",
       "title": "What the cache is for",
       "body": "`LruCache` keeps at most `capacity` items and forgets the one used **longest ago**.",
-      "code": {"file": "src/cache.py", "lines": [4, 9]},
       "elements": [
         {
           "type": "vocab", "code": {"file": "src/cache.py", "lines": [4, 9]}, "min_opened": 2,
@@ -76,7 +75,6 @@
       "id": "eviction",
       "title": "How eviction works",
       "body": "After each `put`, the cache drops the **first** item of its ordered dict when it is over capacity.",
-      "code": {"language": "python", "text": "self._items.popitem(last=False)"},
       "elements": [
         {
           "type": "prose",
@@ -148,6 +146,7 @@
           "type": "code",
           "code": {"file": "src/cache.py", "lines": [11, 15]},
           "caption": "A miss returns before touching the order.",
+          "depth": "detail",
           "claims": [
             {
               "text": "A miss returns before the key is moved.",

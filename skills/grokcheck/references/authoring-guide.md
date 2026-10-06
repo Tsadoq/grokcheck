@@ -26,7 +26,7 @@ Merge or drop steps that do not fit; a small helper may need only purpose, flow 
 
 ### Media by content
 
-Every section shows its idea with at least one non-code element in its short view: a diagram, trace, vocab, diff, spike, playground, options, assumptions or video element. Prose and code alone do not count. Pair each one with a checkpoint that asks about it, since viewing alone teaches little.
+Every section shows its idea with at least one non-code element in its short view: a view, diagram, trace, vocab, diff, spike, playground, options, assumptions or video element. Prose and code alone do not count. Pair each one with a checkpoint that asks about it, since viewing alone teaches little.
 
 Draw a flowchart top-down (`flowchart TD`) unless it is a chain of five nodes or fewer: a wide left-to-right graph does not fit the page column, so the reader has to scroll sideways to follow it.
 
@@ -34,15 +34,15 @@ Use every medium that fits the content, not one per content:
 
 | Content or subject | Medium |
 |--------------------|--------|
-| `structure` | a diagram |
-| `behaviour` | a trace stepper with a predict gate |
+| `structure` | a diagram, or a `blocks` or `table` view |
+| `behaviour` | a view over recorded runs, a steps view or a trace stepper, with a predict gate |
 | `change` | an annotated diff |
 | `tests` | a mutation quiz or fix-the-bug question |
-| an `area` or `decision` lesson | a vocab element for the names the reader must know |
+| an `area` or `decision` lesson | a vocab element, or a short `blocks` or `table` view, in the first section for the names the reader must know |
 
 Skip the trace for behaviour only when the code cannot run in isolation, and say why in a `plan.rationale` sentence that names the trace. Time is never a reason: traces and spikes are recorded by subagents in parallel with the sections. List every medium you considered and left out in `plan.rejected`.
 
-`validate --strict` fails on a section whose short view holds only prose and code, a diagram marked `detail`, `trace` rejected while `content` holds `behaviour` with no rationale sentence naming the trace, or with time as its only reason (a `document` lesson cannot hold a trace and is exempt), and an `area` or `decision` lesson without a vocab element.
+`validate --strict` fails on a section whose short view holds only prose and code, a diagram marked `detail`, `trace` rejected while `content` holds `behaviour` with no rationale sentence naming the trace, or with time as its only reason (a `document` lesson cannot hold a trace and is exempt), any other medium rejected only for time, and an `area` or `decision` lesson whose first section has no vocab element and no short `blocks` or `table` view. The view rules are listed under [Views](#views).
 
 ### Size by time budget
 
@@ -65,6 +65,25 @@ Set `plan.default_depth` to `short` when the lesson has a probe, since a wrong p
 Keep each `body` to 2 to 3 short paragraphs. Lead with the claim, then the evidence in the code. Name real identifiers in inline code so the reader can find them. Explain at the level of a competent developer new to this code: skip language basics, never skip the project's own conventions.
 
 Show code through a `{file, lines}` reference rather than pasting it. The reference always matches the project, and the reader sees real line numbers. Paste inline code only for what does not exist in the project: a usage example, a trimmed extract, or a modified version for a debugging question. Keep any snippet under about 25 lines; cite the smallest span that carries the point.
+
+## Views
+
+A view draws recorded rows, so the picture is what the code did, not what you remember it doing. Record a dataset with a driver script and `grokcheck record` rather than typing rows. Type rows (`grokcheck data author`) only when no run can show them, such as the names in a module, and say why in a `plan.rationale` sentence that names the dataset; time is not a reason.
+
+Shape a section around one dataset like this:
+
+1. The `body`: two or three sentences on the idea.
+2. The concrete case, shown whole: a view with no gate over one scenario, so the reader sees a full example before predicting anything. The first view over each dataset must be this case.
+3. A linked steps view: the few lines of code that produce what the picture shows, one step per decision, each note citing its lines.
+4. The varied case, gated: the same view over a changed input, with the lane or pane the reader must predict masked, answered through `select_items`.
+5. Where the outcome is a rule per case, a table with `fill` cells, answered through `fill_table`.
+6. A checkpoint on the idea itself.
+
+Keep pictures small enough to read at a glance: at most 4 lanes and 12 columns per lanes scenario, at most 10 rows and 5 columns per table, and one heavy element (a view with inputs, a steps view, a trace or a playground) per short view. A view with inputs cannot be gated; give it tasks the reader can meet only by finding a specific scenario, such as the drop that loses a frame. Keep one running example across the lesson: a second recorded dataset needs a rationale sentence that names it.
+
+Show code in small pieces. A `code` element holds at most 12 lines and a diff hunk at most 20 shown lines. Open a section with a picture or prose, never with code; walk longer code through a steps view, at most 6 lines a step.
+
+`validate --strict` also fails on: a gated first case (`first_case_masked`), an extra recorded dataset no rationale sentence names (`many_datasets`), an authored dataset without a reason (`authored_data`), a dataset recorded before its cited files changed (`stale_data`), pictures over the size limits (`view_too_wide`), more than one heavy element in a short view (`heavy_elements`), long code (`code_too_long`), a section that opens with code (`code_first`), and a lesson with datasets whose final lacks a transfer or a wrong-data item.
 
 ## Claims
 
@@ -130,6 +149,11 @@ A `document` lesson replaces those three with its own:
 - **One wrong-summary item**: a summary of the paper that misstates its claim, method or scope, which the reader must reject and correct.
 - **One explain-in-plain-English item**: an `open_answer` asking what the document recommends and for whom, in one or two sentences.
 
+A lesson with datasets adds two items:
+
+- **One transfer item**: a final `select_items` or `fill_table` whose inline view shows only held-out rows, a case no section showed. Declare those rows with the dataset's `held_out` selector.
+- **One wrong-data item**: a final `select_items` over a `wrong` copy of a dataset (`grokcheck data wrong`), asking "One item is wrong. Which?" with `"answer": {"_edited": true}`. It is the wrong-artefact item for a picture.
+
 Weight Apply and Analyze towards debugging, where relying on an agent costs the most: "this input produces the wrong result, which line is responsible", "a teammate made this change, what breaks".
 
 Vary the types. Put the correct option in different positions, since options are shown in authored order.
@@ -178,6 +202,7 @@ Before `validate`, reread the lesson as the reader:
 - Could someone who skimmed each section pass its checkpoints? If so, the checkpoints are too easy.
 - Can every checkpoint be answered from the short view?
 - Does every section's short view show its idea with a non-code element?
+- Was every view's dataset recorded from a driver, and is the first view over it ungated?
 - Does every final question need the code's behaviour, not general knowledge?
 - Does every claim a question depends on cite lines, a pinned source or a spike?
 - Does every `pick_line` count lines from the snippet's first line?

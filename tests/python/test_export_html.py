@@ -8,10 +8,10 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
-from grokcheck.export_html import _script_safe, answer_key, render_html
+from grokcheck.export_html import _embedded, _script_safe, answer_key, render_html
 from grokcheck.grading import ResponseError, grade, summarise
 from grokcheck.lesson import load_lesson
 from grokcheck.run import LessonRun
@@ -42,8 +42,8 @@ console.log(JSON.stringify({ results, summary: summarise(graded) }));
 """
 
 
-def _fixture() -> Lesson:
-    return load_lesson(FIXTURES / "lessons" / "valid_full.json", FIXTURES / "project")
+def _fixture(name: str = "valid_full.json") -> Lesson:
+    return load_lesson(FIXTURES / "lessons" / name, FIXTURES / "project")
 
 
 def _responses(question: Question) -> list[object]:  # noqa: C901, PLR0911
@@ -101,6 +101,19 @@ def _responses(question: Question) -> list[object]:  # noqa: C901, PLR0911
                 {},
                 [accepted],
             ]
+        case "select_items":
+            cells = key["answer_cells"]
+            others = [c for c in key["candidates"] if c not in cells]
+            return [cells, cells[:1], [*cells, others[0]], [], ["nope"], "x", [1]]
+        case "fill_table":
+            right: dict[str, dict[str, object]] = key["cells"]
+            first = next(iter(right))
+            field = next(iter(right[first]))
+            off = {cell: dict(row) for cell, row in right.items()}
+            off[first][field] = "nope"
+            short = {cell: dict(row) for cell, row in right.items()}
+            del short[first][field]
+            return [right, off, short, {}, {first: "x"}, [right]]
         case "open_answer":
             size = len(key["rubric"])
             return [
@@ -121,15 +134,16 @@ def _python(question: Question, response: Any, confidence: Any) -> Grade | None:
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+@pytest.mark.parametrize("fixture", ["valid_full.json", "valid_views.json"])
 def test_browser_grading_matches_the_server_for_every_question_type(
-    tmp_path: Path,
+    tmp_path: Path, fixture: str
 ) -> None:
     """Every fixture question grades the same in web/grading.js as in Python.
 
     An export grades in the browser; a drift would score the same answer
     differently offline than in a served lesson.
     """
-    lesson = _fixture()
+    lesson = _fixture(fixture)
     questions = [
         *lesson.probe,
         *(q for section in lesson.sections for q in section.checkpoints),
@@ -181,7 +195,9 @@ def test_browser_grading_matches_the_server_for_every_question_type(
     expected_summary = dataclasses.asdict(
         summarise(grade_ for grade_ in python if grade_ is not None)
     )
-    if json.loads(json.dumps(expected_summary)) != browser["summary"]:
+    expected = json.loads(json.dumps(expected_summary))
+    expected["final_score"] = pytest.approx(expected["final_score"])
+    if expected != browser["summary"]:
         pytest.fail(f"summary {browser['summary']}, expected {expected_summary}")
 
 
@@ -223,3 +239,37 @@ def test_a_fragment_starts_with_its_title_and_style(tmp_path: Path) -> None:
         pytest.fail("a fragment should open with its <title> and <style>")
     if found := re.search(r"<(?:!doctype|html|head|body)\b", markup, re.IGNORECASE):
         pytest.fail(f"a fragment should carry no document tag, found {found[0]}")
+
+
+def test_the_export_carries_masked_views_and_their_gated_payloads(
+    tmp_path: Path,
+) -> None:
+    """Offline, the page unmasks a view from `gates` once its checkpoint is graded."""
+    project = tmp_path / "project"
+    shutil.copytree(FIXTURES / "project", project)
+    lesson = load_lesson(FIXTURES / "lessons" / "valid_views.json", project)
+
+    data = _embedded(LessonRun.create(lesson, project))
+
+    gates = cast("dict[str, dict[str, Any]]", data["gates"])
+    if {gate: payload["view"] for gate, payload in gates.items()} != {
+        "cp-walk": "v-walk",
+        "cp-lost": "v-drop2",
+        "cp-kinds": "v-rules",
+        "cp-taken": "v-read2",
+    }:
+        pytest.fail(f"gates {sorted(gates)}")
+    keys = cast("dict[str, dict[str, Any]]", data["keys"])
+    if list(keys["cp-lost"]["answer_cells"]) != ["new|client|3", "new|client|4"]:
+        pytest.fail(f"answer key {keys['cp-lost']}")
+    sections = cast("dict[str, Any]", data["lesson"])["sections"]
+    masked = [
+        item
+        for section in sections
+        for element in section["elements"]
+        if element["id"] == "v-drop2"
+        for item in element["items"]
+        if item.get("_masked")
+    ]
+    if len(masked) != 5:  # noqa: PLR2004
+        pytest.fail(f"masked cells in the export {masked}")

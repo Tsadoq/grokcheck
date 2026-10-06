@@ -41,7 +41,8 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["INP001"]
-"tests/fixtures/**" = ["D", "EM101", "TRY003"]
+"tests/fixtures/**" = ["D", "EM101", "TRY003", "N818"]
+"**/.grokcheck/drivers/**" = ["F821"]
 
 [tool.mypy]
 strict = true

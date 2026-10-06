@@ -49,6 +49,8 @@ export function emptyReveal(explanation, fields) {
     mutation: null,
     lines: [],
     distractors: [],
+    answer_cells: [],
+    cells: {},
     element_payload: null,
     ...fields,
   };
@@ -92,6 +94,10 @@ function gradeQuestion(question, response) {
       return [...exact(passed(response)), { mutation: question.mutation }];
     case "parsons":
       return [...parsons(response, question.lines, question.distractors), { lines: question.lines, distractors: question.distractors }];
+    case "select_items":
+      return [...overlap(pickedCells(response, question.candidates), new Set(question.answer_cells)), { answer_cells: question.answer_cells }];
+    case "fill_table":
+      return [...table(response, question.cells), { cells: question.cells }];
     default:
       throw new ResponseError(`unknown question type ${question.type}`);
   }
@@ -123,6 +129,50 @@ function overlap(chosen, correct) {
   }
   const score = union.size ? shared / union.size : 0;
   return [score ? "partial" : "incorrect", score];
+}
+
+function pickedCells(response, candidates) {
+  const picked = items(response);
+  if (!picked.every((cell) => typeof cell === "string" && candidates.includes(cell))) {
+    throw new ResponseError("must list cells of the view");
+  }
+  return new Set(picked);
+}
+
+function isObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function table(response, cells) {
+  if (!isObject(response) || !Object.values(response).every(isObject)) {
+    throw new ResponseError("must map each cell to an object of field values");
+  }
+  let total = 0;
+  let right = 0;
+  for (const [cell, row] of Object.entries(cells)) {
+    for (const [field, value] of Object.entries(row)) {
+      total += 1;
+      const given = Object.hasOwn(response, cell) ? response[cell] : {};
+      if (Object.hasOwn(given, field) && same(given[field], value)) {
+        right += 1;
+      }
+    }
+  }
+  const score = total ? right / total : 0;
+  if (score === 1) {
+    return ["correct", 1];
+  }
+  return [score ? "partial" : "incorrect", score];
+}
+
+function same(left, right) {
+  if (typeof left === "boolean" || typeof right === "boolean" || (typeof left === "number" && typeof right === "number")) {
+    return left === right;
+  }
+  if (left === null || right === null) {
+    return left === right;
+  }
+  return typeof left === "string" && typeof right === "string" && left === right;
 }
 
 function order(response, steps) {

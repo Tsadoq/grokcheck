@@ -5,6 +5,7 @@ import { renderMarkdown } from "./markdown.js";
 import { createPlayground } from "./playground.js";
 import { REVEAL_EVENT, codeView, element } from "./questions.js";
 import { createStepper } from "./stepper.js";
+import { createView } from "./view.js";
 
 export const ELEMENT_RENDERERS = {
   prose: (item) => element("div", { class: "prose", html: renderMarkdown(item.markdown) }),
@@ -28,9 +29,14 @@ export const ELEMENT_RENDERERS = {
   assumptions: renderAssumptions,
   diagram: renderDiagram,
   video: renderVideo,
+  view: createView,
 };
 
-export const GATING_ELEMENTS = new Set(["vocab", "playground"]);
+const GATING_ELEMENTS = new Set(["vocab", "playground"]);
+
+export function gatesSection(item) {
+  return item.depth !== "detail" && (item.type === "view" ? (item.tasks ?? []).length > 0 : GATING_ELEMENTS.has(item.type));
+}
 
 export function renderElements(section, context = {}) {
   const fragment = document.createDocumentFragment();

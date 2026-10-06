@@ -4,12 +4,19 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from test_cli import _FINAL_ANSWERS, FIXTURES, _grokcheck, _serve_and_submit
+from test_cli import (
+    _FINAL_ANSWERS,
+    FIXTURES,
+    PACKAGE_DIR,
+    _grokcheck,
+    _serve_and_submit,
+)
 
 _LESSON_WRITTEN = datetime(2021, 1, 1, tzinfo=UTC).timestamp()
 
@@ -272,3 +279,77 @@ def test_sources_lists_an_ingested_file(tmp_path: Path) -> None:
 
     if listed != {"sources": [ingested]}:
         pytest.fail(f"sources should list only {ingested}, got {listed}")
+
+
+def _dataset_project(root: Path) -> Path:
+    shutil.copytree(FIXTURES / "project" / "src", root / "src")
+    drivers = root / ".grokcheck" / "drivers"
+    shutil.copytree(FIXTURES / "project" / ".grokcheck" / "drivers", drivers)
+    driver = drivers / "reconnect.py"
+    driver.write_text(
+        "print('chatter on stdout')\n" + driver.read_text("utf-8"), encoding="utf-8"
+    )
+    return driver
+
+
+_INPUTS = {"version": ["new"], "drop": [2], "lid": [2, 3, 4], "running": [0, 1]}
+
+
+def test_record_then_show_wrong_and_author(tmp_path: Path) -> None:
+    """The dataset commands print one JSON line each, even when a driver prints."""
+    driver = _dataset_project(tmp_path)
+
+    recorded = _grokcheck(
+        tmp_path,
+        *("record", str(driver), "--id", "reconnect", "--cite", "src/stream.py"),
+        *("--matrix", "version=new", "drop=2"),
+        *("--matrix", "lid=2..4", "--matrix", "running=0,1"),
+    )
+    shown = _grokcheck(
+        tmp_path, "data", "show", "reconnect", "--where", '{"event": "409"}'
+    )
+    where = '{"lid": 2, "running": 0, "lane": "client", "seq": 3}'
+    wrong = _grokcheck(
+        tmp_path,
+        *("data", "wrong", "reconnect", "--out", "reconnect-wrong"),
+        *("--edit", where, 'event="4"'),
+    )
+    rows = tmp_path / "rows.json"
+    cite = {"file": "src/stream.py", "lines": [32, 33], "quote": "raise Beyond"}
+    rows.write_text(json.dumps([{"term": "Beyond", "cite": cite}]), encoding="utf-8")
+    authored = _grokcheck(
+        tmp_path, "data", "author", "terms", "--file", str(rows), "--reason", "names"
+    )
+
+    if (recorded["runs"], recorded["ok"]) != (6, True) or not recorded[
+        "cited_lines_run"
+    ]:
+        pytest.fail(f"record printed {recorded}")
+    if (shown["rows"], shown["inputs"]) != (1, _INPUTS):
+        pytest.fail(f"show printed {shown}")
+    if (wrong["rows"], authored["rows"]) != (recorded["rows"], 1):
+        pytest.fail(f"wrong printed {wrong}, author printed {authored}")
+
+
+def test_record_refusal_prints_problems(tmp_path: Path) -> None:
+    """A refused record exits 1 with the refusal as problems."""
+    _dataset_project(tmp_path)
+    (tmp_path / "bad.py").write_text("emit(lane='client')\n", encoding="utf-8")
+
+    completed = subprocess.run(  # noqa: S603
+        [
+            *(sys.executable, str(PACKAGE_DIR), "record", "bad.py", "--id", "bad"),
+            *("--cite", "src/stream.py"),
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+    output = json.loads(completed.stdout)
+    if completed.returncode != 1 or output["ok"] is not False:
+        pytest.fail(f"refusal printed {completed.stdout}")
+    if not any("no cited line ran" in p["message"] for p in output["problems"]):
+        pytest.fail(f"problems are {output['problems']}")

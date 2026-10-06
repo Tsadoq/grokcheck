@@ -2,10 +2,13 @@
 
 import dataclasses
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 from grokcheck.lesson import (
+    CodeBlock,
+    CodeElement,
     DiagramElement,
     Element,
     Lesson,
@@ -13,6 +16,7 @@ from grokcheck.lesson import (
     Section,
     Subject,
     Term,
+    ViewElement,
     VocabElement,
     load_lesson,
 )
@@ -305,14 +309,178 @@ def test_media_lint_accepts_a_trace_rejection_only_with_a_reason_besides_time(
         pytest.fail(f"rationale {rationale!r} warns {rules}")
 
 
-def test_media_lint_flags_an_area_lesson_without_vocab(tmp_path: Path) -> None:
-    """An area lesson needs a vocab element; a concept lesson does not."""
+def test_media_lint_flags_an_area_lesson_without_names_first(tmp_path: Path) -> None:
+    """An area lesson needs its names in its first section; a concept one does not."""
     base = _lesson(tmp_path, _CLEAN_FINAL)
     area = _with(base, _DIAGRAM, plan=_plan("area", ("structure",), ()))
 
-    if _rules(area) != [("no_vocab", "$")]:
+    if _rules(area) != [("no_names_first", "sections[0]")]:
         pytest.fail(f"area lesson without vocab warns {media(area)}")
     if shown := media(_with(base, _VOCAB, plan=_plan("area", ("structure",), ()))):
         pytest.fail(f"area lesson with vocab warns {shown}")
     if shown := media(_with(base, _DIAGRAM, plan=_plan("concept", ("structure",), ()))):
         pytest.fail(f"concept lesson warns {shown}")
+
+
+VIEWS = Path(__file__).parent.parent / "fixtures" / "lessons" / "valid_views.json"
+
+
+def _views_lesson() -> Lesson:
+    return load_lesson(VIEWS, PROJECT)
+
+
+def _edit_element(
+    lesson: Lesson, view_id: str, edit: Callable[[ViewElement], ViewElement]
+) -> Lesson:
+    sections = tuple(
+        dataclasses.replace(
+            section,
+            elements=tuple(
+                edit(e) if isinstance(e, ViewElement) and e.id == view_id else e
+                for e in section.elements
+            ),
+        )
+        for section in lesson.sections
+    )
+    return dataclasses.replace(lesson, sections=sections)
+
+
+def _add_elements(lesson: Lesson, index: int, *elements: Element) -> Lesson:
+    section = lesson.sections[index]
+    changed = dataclasses.replace(section, elements=(*elements, *section.elements))
+    sections = (*lesson.sections[:index], changed, *lesson.sections[index + 1 :])
+    return dataclasses.replace(lesson, sections=sections)
+
+
+def _plan_with(
+    lesson: Lesson,
+    rationale: tuple[str, ...] | None = None,
+    rejected: tuple[str, ...] | None = None,
+) -> Lesson:
+    if lesson.plan is None:
+        pytest.fail("the views fixture has no plan")
+    plan = dataclasses.replace(
+        lesson.plan,
+        rationale=lesson.plan.rationale if rationale is None else rationale,
+        rejected=lesson.plan.rejected if rejected is None else rejected,
+    )
+    return dataclasses.replace(lesson, plan=plan)
+
+
+def _rationale(lesson: Lesson) -> tuple[str, ...]:
+    return lesson.plan.rationale if lesson.plan else ()
+
+
+def _long_code() -> CodeElement:
+    return CodeElement(code=CodeBlock("python", "\n".join(["x = 1"] * 13)))
+
+
+def test_the_views_fixture_passes_every_media_rule() -> None:
+    """The fixture is the reference lesson for views, so it must lint clean."""
+    if warnings := media(_views_lesson()):
+        pytest.fail(f"the views fixture warns {warnings}")
+
+
+@pytest.mark.parametrize(
+    ("rule", "path", "edit"),
+    [
+        (
+            "code_too_long",
+            "sections[1].elements[1]",
+            lambda lesson: _add_elements(lesson, 1, _DIAGRAM, _long_code()),
+        ),
+        (
+            "code_first",
+            "sections[1]",
+            lambda lesson: _add_elements(
+                lesson, 1, CodeElement(code=CodeBlock("python", "x = 1"))
+            ),
+        ),
+        (
+            "heavy_elements",
+            "sections[3]",
+            lambda lesson: _edit_element(
+                lesson, "v-read", lambda v: dataclasses.replace(v, layout="steps")
+            ),
+        ),
+        (
+            "view_too_wide",
+            "sections[2].elements[1]",
+            lambda lesson: _edit_element(
+                lesson,
+                "v-rules",
+                lambda v: dataclasses.replace(
+                    v,
+                    encode={
+                        "columns": [{"field": f, "label": f} for f in "abcdef"],
+                        "key": "seq",
+                    },
+                ),
+            ),
+        ),
+        (
+            "first_case_masked",
+            "sections[1].elements[0]",
+            lambda lesson: _edit_element(
+                lesson, "v-drop", lambda v: dataclasses.replace(v, gate="cp-prompts")
+            ),
+        ),
+        (
+            "many_datasets",
+            "plan.rationale",
+            lambda lesson: _plan_with(
+                lesson, rationale=(_rationale(lesson)[0], _rationale(lesson)[2])
+            ),
+        ),
+        (
+            "authored_data",
+            "datasets[2]",
+            lambda lesson: _plan_with(lesson, rationale=_rationale(lesson)[:2]),
+        ),
+        (
+            "stale_data",
+            "datasets[0]",
+            lambda lesson: dataclasses.replace(
+                lesson,
+                datasets=(
+                    dataclasses.replace(lesson.datasets[0], stale=("src/stream.py",)),
+                    *lesson.datasets[1:],
+                ),
+            ),
+        ),
+        (
+            "rejected_for_time",
+            "plan.rejected[0]",
+            lambda lesson: _plan_with(
+                lesson,
+                rejected=("diagram",),
+                rationale=(
+                    *_rationale(lesson),
+                    "A diagram would take too long to draw.",
+                ),
+            ),
+        ),
+        (
+            "final_transfer_missing",
+            "final",
+            lambda lesson: dataclasses.replace(
+                lesson, final=(lesson.final[1], lesson.final[3])
+            ),
+        ),
+        (
+            "final_wrong_data_missing",
+            "final",
+            lambda lesson: dataclasses.replace(
+                lesson, final=(lesson.final[0], *lesson.final[2:])
+            ),
+        ),
+    ],
+)
+def test_each_view_lint_rule_fires_at_its_path(
+    rule: str, path: str, edit: Callable[[Lesson], Lesson]
+) -> None:
+    """Each rule warns at the path to fix, and only that rule fires."""
+    rules = [(w.rule, w.path) for w in media(edit(_views_lesson()))]
+
+    if rules != [(rule, path)]:
+        pytest.fail(f"expected only {(rule, path)}, got {rules}")

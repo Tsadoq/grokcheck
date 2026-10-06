@@ -56,10 +56,15 @@ class Step:
 
 @dataclass
 class Trace:
-    """The events of one run; `truncated` means it hit `max_events`."""
+    """The events of one run; `truncated` means it hit `max_events`.
+
+    `lines_run` maps each cited file to every line a function in it executed,
+    uncapped; module and class bodies run at import are left out.
+    """
 
     events: list[Event]
     truncated: bool = False
+    lines_run: dict[str, set[int]] = field(default_factory=dict, compare=False)
 
     @property
     def steps(self) -> list[Step]:
@@ -94,6 +99,7 @@ def record(
     cited: set[Path],
     entry: str | None = None,
     max_events: int = DEFAULT_MAX_EVENTS,
+    init_globals: dict[str, Any] | None = None,
 ) -> Trace:
     """Run `script` under the recorder and return what it did.
 
@@ -101,7 +107,8 @@ def record(
     loaded and `entry()` is called, and run with `asyncio.run` if it returns a
     coroutine. A line event's `file` is the cited path as the caller spelled it.
     `sys.exit` ends the run normally; other exceptions from the script
-    propagate after the recorder is removed.
+    propagate after the recorder is removed. `init_globals` seeds the
+    script's globals.
     """
     recorder = _Recorder(cited, max_events)
     previous_policy = asyncio.get_event_loop_policy()
@@ -110,18 +117,18 @@ def record(
     sys.settrace(recorder.trace)
     try:
         with contextlib.suppress(SystemExit):
-            _run(script, entry)
+            _run(script, entry, init_globals)
     finally:
         sys.settrace(previous_trace)
         asyncio.set_event_loop_policy(previous_policy)
-    return Trace(recorder.events, truncated=recorder.truncated)
+    return Trace(recorder.events, recorder.truncated, recorder.lines_run)
 
 
-def _run(script: Path, entry: str | None) -> None:
+def _run(script: Path, entry: str | None, init_globals: dict[str, Any] | None) -> None:
     if entry is None:
-        runpy.run_path(str(script), run_name="__main__")
+        runpy.run_path(str(script), init_globals, run_name="__main__")
         return
-    result = runpy.run_path(str(script))[entry]()
+    result = runpy.run_path(str(script), init_globals)[entry]()
     if inspect.iscoroutine(result):
         asyncio.run(result)
 
@@ -130,6 +137,7 @@ class _Recorder:
     def __init__(self, cited: set[Path], max_events: int) -> None:
         self.events: list[Event] = []
         self.truncated = False
+        self.lines_run: dict[str, set[int]] = {}
         self._max_events = max_events
         self._cited = {path.resolve(): str(path) for path in cited}
         self._files: dict[str, str | None] = {}
@@ -155,7 +163,14 @@ class _Recorder:
             if event == "line":
                 file = self._cited_file(frame)
                 if file is not None:
-                    self._emit("line", frame=frame, frame_locals=_safe_locals(frame))
+                    if frame.f_code.co_flags & inspect.CO_OPTIMIZED:
+                        self.lines_run.setdefault(file, set()).add(frame.f_lineno)
+                    if len(self.events) < self._max_events:
+                        self._emit(
+                            "line", frame=frame, frame_locals=_safe_locals(frame)
+                        )
+                    else:
+                        self.truncated = True
             elif event == "return" and _is_suspending(frame):
                 task = self._task_owning(frame)
                 if task is not None:

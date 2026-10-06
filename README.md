@@ -62,6 +62,7 @@ Each section is prose plus any of these elements, followed by its checkpoint que
 
 | Element | What you see |
 |---------|--------------|
+| View | A picture drawn from rows recorded by running the real code: events in lanes, a table, a code walk, named blocks or the path a decision took. You can vary the inputs, and a varied case stays hidden until you predict it |
 | Code | The lines the section is about |
 | Diff | One hunk of a change, with notes you click to highlight their lines and a prepared question per line |
 | Vocabulary | The names you need, each marking its lines in the code when clicked |
@@ -197,7 +198,18 @@ To keep the misses outside grokcheck, ask for an export: `grokcheck export <less
 
 To share a lesson with someone who has no grokcheck, `grokcheck export <lesson-id> --format html [--out <file>]` writes the lesson page as one HTML file that opens from disk with no server: the same design, gates, diagrams, stepper, videos, final quiz and debrief, graded in the browser. The file carries the answer keys, so give it to readers, not to people you are testing. Asking questions, Socratic mode and the agent's re-grading of free-text answers need the agent and do not work offline, and mutation and fix-the-bug questions, which run the project's tests, are shown as skipped and left out of the score. Videos are re-encoded at 720p, or left out with their transcript kept, when the file would pass 14 MB. `--fragment` writes the page without the document tags, for a host page that wraps it.
 
-When the code or the discussion has moved on since a lesson, ask the agent to refresh it. `grokcheck refresh` reruns the lesson's experiments and reports which claims no longer match the code, so only those sections are rewritten.
+When the code or the discussion has moved on since a lesson, ask the agent to refresh it. `grokcheck refresh` reruns the lesson's experiments and reports which claims and recorded examples no longer match the code, so only those sections are rewritten.
+
+### Recorded examples
+
+The values a view shows are recorded, not typed. The agent writes a short driver script that calls the code and reports each value with `emit(...)`, and `grokcheck record` runs it once per combination of inputs, each in a fresh process:
+
+```
+grokcheck record .grokcheck/drivers/reconnect.py --id reconnect --cite src/stream.py \
+  --matrix running=0,1 drop=1..4 lid=2..6 --python .venv/bin/python
+```
+
+The rows go to `.grokcheck/data/<id>.json` with the lines of the cited files each run executed, the commit and the driver's hash. A record whose runs never executed a cited line is refused, so rows cannot come from a driver that only prints. `--python` runs the driver under the project's own interpreter, which needs no install of grokcheck. `grokcheck data show <id>` prints a summary and sample rows, `data wrong` makes a copy with one deliberate error for the final quiz, and `data author` accepts rows typed by hand when nothing can run the code, each row citing the lines it comes from.
 
 ### Where lessons are stored
 

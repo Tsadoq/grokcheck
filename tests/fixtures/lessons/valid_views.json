@@ -1,0 +1,318 @@
+{
+  "schema_version": 3,
+  "title": "How a reconnecting stream replays events",
+  "seed": 11,
+  "plan": {
+    "subject": "area",
+    "time_budget": 30,
+    "content": ["structure", "behaviour"],
+    "media": ["view", "select_items", "fill_table", "predict_state"],
+    "rejected": [],
+    "rationale": [
+      "Recorded runs of the reconnect driver show what the browser receives for each drop.",
+      "The producer recording adds a second dataset because it shows task switching that the stream runs cannot show.",
+      "The terms dataset is authored because names are read from the code and no run shows them."
+    ],
+    "default_depth": "short"
+  },
+  "scope": {
+    "summary": "The event log and read() in src/stream.py, and the producer in src/producer.py.",
+    "files": ["src/stream.py", "src/producer.py"]
+  },
+  "kinds": [
+    {"id": "prompt", "label": "prompt", "colour": "accent"},
+    {"id": "answer", "label": "answer", "colour": "ok"},
+    {"id": "thinking", "label": "thinking", "colour": "replay"},
+    {"id": "error", "label": "error", "colour": "bad"}
+  ],
+  "datasets": [
+    {"id": "reconnect", "held_out": {"version": "new", "drop": 3, "lid": 4}},
+    {"id": "reconnect-wrong"},
+    {"id": "terms"},
+    {"id": "producer"}
+  ],
+  "sections": [
+    {
+      "id": "names",
+      "title": "The names in the stream",
+      "body": "Four names carry this lesson. Two belong to reading and two to the paths a read takes.",
+      "elements": [
+        {
+          "type": "view", "id": "v-terms", "layout": "blocks", "data": "terms",
+          "caption": "Which names belong together?",
+          "encode": {"group": "group", "key": "term", "label": "term", "group_label": "group"}
+        }
+      ],
+      "checkpoints": [
+        {
+          "id": "cp-names",
+          "type": "single_choice",
+          "prompt": "Which name is raised when the cursor is past the last event?",
+          "options": [
+            {"text": "`AtEnd`", "why": "That one marks a cursor exactly at the end."},
+            {"text": "`Beyond`", "why": "read() raises it when the cursor is past the end."},
+            {"text": "`replay`", "why": "That is a path that yields events."}
+          ],
+          "correct": 1,
+          "explanation": "The first check in read() compares the cursor with the end."
+        }
+      ]
+    },
+    {
+      "id": "replay",
+      "title": "One reconnect, shown whole",
+      "body": "The browser drops after frame 2 and reconnects with Last-Event-ID 2. Compare what the transcript has with what the browser received.",
+      "elements": [
+        {
+          "type": "view", "id": "v-drop", "layout": "lanes", "data": "reconnect",
+          "caption": "Which events reach the browser?",
+          "where": {"version": "new", "drop": 2, "lid": 2, "running": 0},
+          "encode": {
+            "lane": "lane", "x": "seq", "key": "event", "label": "text", "class": "kind",
+            "ref_lane": "server",
+            "lanes": [{"value": "server", "label": "transcript has"}, {"value": "client", "label": "browser received"}]
+          },
+          "marks": [{"where": {"lane": "server", "seq": 2}, "text": "connection drops after frame {seq}", "tone": "bad", "place": "column"}],
+          "layers": [{"id": "wire", "label": "Show the wire frames", "fields": ["seq", "kind"]}],
+          "notes": [{"where": {"lane": "client", "kind": "thinking"}, "text": "The browser gets the thinking event as frame 4."}]
+        },
+        {
+          "type": "view", "id": "v-walk", "layout": "steps", "gate": "cp-walk",
+          "caption": "read(), a few lines at a time",
+          "steps": [
+            {"code": {"file": "src/stream.py", "lines": [[30, 33]]}, "note": "A cursor past the end raises Beyond.", "link": ["beyond"]},
+            {"code": {"file": "src/stream.py", "lines": [[34, 35], [36, 38]]}, "note": "A running turn follows. A finished one replays.", "link": ["follow", "replay"]},
+            {"code": {"file": "src/stream.py", "lines": [[45, 48]]}, "note": "Replay yields each stored event after the cursor.", "link": ["replay"]}
+          ]
+        }
+      ],
+      "checkpoints": [
+        {
+          "id": "cp-walk",
+          "type": "predict_state",
+          "view": "v-walk",
+          "step": 2,
+          "prompt": "Five events are stored and the cursor is 2. Which frames does replay yield?",
+          "options": [
+            {"text": "Frames 2, 3, 4 and 5", "why": "The frame number is the index plus one."},
+            {"text": "Frames 1 to 5", "why": "That is what the old reader sends."},
+            {"text": "Frames 3, 4 and 5", "why": "Replay starts at the index equal to the cursor."}
+          ],
+          "correct": 2,
+          "explanation": "Index 2 holds the third event, sent as frame 3."
+        },
+        {
+          "id": "cp-prompts",
+          "type": "select_items",
+          "view": "v-drop",
+          "prompt": "Click the prompts the browser received.",
+          "answer": {"lane": "client", "kind": "prompt"},
+          "explanation": "Frames 1 and 3 are prompts."
+        }
+      ]
+    },
+    {
+      "id": "loss",
+      "title": "When the cursor runs ahead",
+      "body": "Now the browser drops after frame 2 but sends Last-Event-ID 4. The old reader ignores the cursor. The new one trusts it.",
+      "elements": [
+        {
+          "type": "view", "id": "v-drop2", "layout": "lanes", "data": "reconnect",
+          "caption": "What does the new reader lose?",
+          "where": {"drop": 2, "lid": 4, "running": 0},
+          "split": "version",
+          "encode": {
+            "lane": "lane", "x": "seq", "key": "event", "label": "text", "class": "kind",
+            "ref_lane": "server",
+            "lanes": [{"value": "server", "label": "transcript has"}, {"value": "client", "label": "browser received"}]
+          },
+          "mask": {"_pane": "new", "lane": "client"},
+          "gate": "cp-lost"
+        },
+        {
+          "type": "view", "id": "v-rules", "layout": "table", "data": "reconnect",
+          "caption": "What kind is each stored event?",
+          "where": {"version": "new", "drop": 2, "lid": 2, "running": 0, "lane": "server"},
+          "encode": {"columns": [{"field": "seq", "label": "frame"}, {"field": "text", "label": "text"}, {"field": "kind", "label": "kind"}], "key": "seq", "class": "kind"},
+          "fill": ["kind"],
+          "mask": {"seq": {"gte": 3}},
+          "gate": "cp-kinds"
+        }
+      ],
+      "checkpoints": [
+        {
+          "id": "cp-lost",
+          "type": "select_items",
+          "view": "v-drop2",
+          "prompt": "The new reader resumes from cursor 4. Click the frames the browser never gets.",
+          "answer": {"_pane": "new", "lane": "client", "_lost": true},
+          "explanation": "Frames 3 and 4 sit between the drop and the cursor."
+        },
+        {
+          "id": "cp-kinds",
+          "type": "fill_table",
+          "view": "v-rules",
+          "prompt": "Fill in the kind of frames 3 to 5.",
+          "explanation": "The second turn is a prompt, a thinking event and an answer."
+        }
+      ]
+    },
+    {
+      "id": "scrub",
+      "title": "Try every reconnect",
+      "body": "Move the drop and the cursor. Watch which branch of read() runs for each case.",
+      "elements": [
+        {
+          "type": "view", "id": "v-scrub", "layout": "lanes", "data": "reconnect",
+          "caption": "What does the browser get for each reconnect?",
+          "where": {"version": "new"},
+          "encode": {
+            "lane": "lane", "x": "seq", "key": "event", "label": "text", "class": "kind",
+            "ref_lane": "server"
+          },
+          "inputs": [
+            {"field": "drop", "label": "Connection drops after frame", "control": "range", "default": 2},
+            {"field": "lid", "label": "Last-Event-ID sent back", "control": "range", "default": 2, "follows": "drop", "hint": "An EventSource sends the last id it saw."},
+            {"field": "running", "label": "Turn 2 still running", "control": "toggle", "default": 0}
+          ],
+          "presets": [{"label": "short drop", "values": {"drop": 2, "lid": 2, "running": 0}}],
+          "tasks": [
+            {"text": "Find a reconnect that answers 409.", "when": {"lane": "client", "event": "409"}},
+            {"text": "Find a reconnect that loses a frame.", "when": {"lane": "client", "_lost": true}}
+          ],
+          "missing": "Drop 3 with cursor 4 is kept for the final quiz."
+        },
+        {
+          "type": "view", "id": "v-read", "layout": "decision", "data": "reconnect",
+          "caption": "Which answer does read() pick?",
+          "where": {"version": "new"},
+          "inputs": {"from": "v-scrub"},
+          "nodes": [
+            {"id": "beyond", "label": "cursor > end?", "kind": "check", "code": {"file": "src/stream.py", "lines": [32, 32]}, "yes": {"lines": [33, 33]}, "note": "This is checked first, running or not."},
+            {"id": "409", "label": "409 Conflict", "kind": "outcome", "tone": "bad", "code": {"file": "src/stream.py", "lines": [33, 33]}, "note": "Beyond maps to 409.", "example": {"version": "new", "drop": 2, "lid": 4, "running": 1}},
+            {"id": "follow", "label": "follow", "kind": "outcome", "code": {"file": "src/stream.py", "lines": [37, 37]}, "note": "A running turn follows the log."},
+            {"id": "replay", "label": "replay", "kind": "outcome", "tone": "ok", "code": {"file": "src/stream.py", "lines": [38, 38]}, "note": "A finished turn replays from the cursor."}
+          ],
+          "tasks": [{"text": "Make read() answer 409.", "when": {"node": "409", "_taken": true}}]
+        }
+      ],
+      "checkpoints": [
+        {
+          "id": "cp-branch",
+          "type": "single_choice",
+          "prompt": "The turn is running and the cursor is 4 with 3 events stored. Which branch runs?",
+          "options": [
+            {"text": "It follows the log.", "why": "The running check comes after the Beyond check."},
+            {"text": "It raises Beyond.", "why": "The cursor is past the end, so the first check fires."},
+            {"text": "It replays the log.", "why": "Replay runs only for a finished turn."}
+          ],
+          "correct": 1,
+          "explanation": "The Beyond check runs before the running check."
+        }
+      ]
+    },
+    {
+      "id": "tasks",
+      "title": "Branches and task switches",
+      "body": "Predict the branches one run takes. Then step through two producer tasks that share the event loop.",
+      "elements": [
+        {
+          "type": "view", "id": "v-read2", "layout": "decision", "data": "reconnect",
+          "caption": "Which nodes does this reconnect reach?",
+          "where": {"version": "new", "drop": 2, "lid": 4, "running": 1},
+          "nodes": [
+            {"id": "beyond", "label": "cursor > end?", "kind": "check", "code": {"file": "src/stream.py", "lines": [32, 32]}, "yes": {"lines": [33, 33]}, "note": "This is checked first, running or not."},
+            {"id": "409", "label": "409 Conflict", "kind": "outcome", "tone": "bad", "code": {"file": "src/stream.py", "lines": [33, 33]}, "note": "Beyond maps to 409."},
+            {"id": "follow", "label": "follow", "kind": "outcome", "code": {"file": "src/stream.py", "lines": [37, 37]}, "note": "A running turn follows the log."},
+            {"id": "replay", "label": "replay", "kind": "outcome", "tone": "ok", "code": {"file": "src/stream.py", "lines": [38, 38]}, "note": "A finished turn replays from the cursor."}
+          ],
+          "gate": "cp-taken"
+        },
+        {
+          "type": "view", "id": "v-prod", "layout": "steps", "data": "producer",
+          "caption": "How do tasks A and B take turns?",
+          "where": {"event": "line", "seq": {"gte": 12, "lte": 31}},
+          "encode": {"file": "file", "line": "line", "key": "seq", "show": ["l_items"]}
+        }
+      ],
+      "checkpoints": [
+        {
+          "id": "cp-taken",
+          "type": "select_items",
+          "view": "v-read2",
+          "prompt": "The browser reconnects with cursor 4 while turn 2 runs. Click the nodes this run reaches.",
+          "answer": {"_taken": true},
+          "explanation": "Three events are stored, so cursor 4 is past the end."
+        },
+        {
+          "id": "cp-step",
+          "type": "predict_state",
+          "view": "v-prod",
+          "step": 3,
+          "prompt": "Task A has appended its first item. What does `items` hold now?",
+          "options": [
+            {"text": "`[1, 1]`", "why": "The two tasks do not share a list."},
+            {"text": "`[]`", "why": "The append has already run."},
+            {"text": "`[1]`", "why": "Each task appends to its own list."}
+          ],
+          "correct": 2,
+          "explanation": "Each call of produce() gets a new empty list."
+        }
+      ]
+    }
+  ],
+  "final": [
+    {
+      "id": "f-transfer",
+      "type": "select_items",
+      "prompt": "The browser drops after frame 3 and sends Last-Event-ID 4. Click the frames it never gets.",
+      "view": {
+        "type": "view", "layout": "lanes", "data": "reconnect",
+        "caption": "Drop after frame 3, cursor 4",
+        "where": {"version": "new", "drop": 3, "lid": 4, "running": 0},
+        "encode": {"lane": "lane", "x": "seq", "key": "event", "label": "text", "class": "kind", "ref_lane": "server"},
+        "mask": {"lane": "client"}
+      },
+      "answer": {"lane": "client", "_lost": true},
+      "explanation": "Only frame 4 sits between the drop and the cursor."
+    },
+    {
+      "id": "f-wrong",
+      "type": "select_items",
+      "prompt": "One item is wrong. Which?",
+      "view": {
+        "type": "view", "layout": "lanes", "data": "reconnect-wrong",
+        "caption": "A copy of one recorded reconnect",
+        "where": {"version": "new", "drop": 2, "lid": 2, "running": 0},
+        "encode": {"lane": "lane", "x": "seq", "key": "event", "label": "text", "class": "kind", "ref_lane": "server"}
+      },
+      "answer": {"_edited": true},
+      "explanation": "Frame 3 carries event id 4, but replay sends each event under its own id."
+    },
+    {
+      "id": "f-kinds",
+      "type": "fill_table",
+      "prompt": "The turn is running. Fill in the kind of each stored event.",
+      "view": {
+        "type": "view", "layout": "table", "data": "reconnect",
+        "caption": "Stored events while turn 2 runs",
+        "where": {"version": "new", "drop": 3, "lid": 4, "running": 1, "lane": "server"},
+        "encode": {"columns": [{"field": "seq", "label": "frame"}, {"field": "kind", "label": "kind"}], "key": "seq"},
+        "fill": ["kind"]
+      },
+      "explanation": "Turn 1 is a prompt and an answer, and turn 2 has only its prompt so far."
+    },
+    {
+      "id": "f-order",
+      "type": "single_choice",
+      "prompt": "Why does the old reader send frames 1 and 2 twice after a reconnect?",
+      "options": [
+        {"text": "It always replays from index 0.", "why": "read_old ignores the cursor."},
+        {"text": "The browser asks for them again.", "why": "The browser sends a cursor, which read_old drops."},
+        {"text": "The log stores them twice.", "why": "The transcript lane shows each event once."}
+      ],
+      "correct": 0,
+      "explanation": "read_old calls replay with 0 in place of the cursor."
+    }
+  ]
+}

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -12,7 +14,6 @@ from playwright.sync_api import Page, expect
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
-    from pathlib import Path
 
     from conftest import ServedLesson
 
@@ -215,3 +216,77 @@ def test_trace_stepper_stops_at_gate_and_reveals_after_answer(
     _answer(page, gate, "Check answer")
     expect(stepper.get_by_text(_REVEALED)).to_be_visible()
     expect(page).to_have_url(re.compile(r"[#&]step-reconnect=3"))
+
+
+_FIXTURES = Path(__file__).parents[1] / "fixtures"
+_NARROW = 400
+
+
+@pytest.fixture
+def views_lesson_url(tmp_path: Path) -> Iterator[str]:
+    """Serve the `valid_views.json` fixture from a copy of its project."""
+    project = tmp_path / "project"
+    shutil.copytree(_FIXTURES / "project", project)
+    lesson = _FIXTURES / "lessons" / "valid_views.json"
+    served = grokcheck(project, "serve", str(lesson), "--no-open")
+    try:
+        yield served["url"]
+    finally:
+        grokcheck(project, "stop", served["lesson_id"])
+
+
+def _pick(
+    page: Page, question_id: str, option: int, button: str = "Check answer"
+) -> None:
+    card = page.locator(f'[data-question="{question_id}"]')
+    card.locator("input[name^=choice]").nth(option).check()
+    _commit(page, question_id, button)
+
+
+def _commit(page: Page, question_id: str, button: str = "Check answer") -> None:
+    card = page.locator(f'[data-question="{question_id}"]')
+    card.get_by_label("Sure", exact=True).check()
+    card.get_by_role("button", name=button).click()
+
+
+def test_views_gate_reveal_fill_and_tasks(page: Page, views_lesson_url: str) -> None:
+    """A masked lanes gate reveals, a table fills, a scrubber meets its tasks."""
+    page.goto(views_lesson_url)
+    _pick(page, "cp-names", 1)
+    page.locator('#v-drop .vchip[data-id="client|1"]').click()
+    expect(page.locator("#v-drop .view-payload")).to_contain_text("event: 1")
+    _pick(page, "cp-walk", 2)
+    page.locator('[data-question="cp-prompts"]').get_by_role(
+        "button", name="Answer on the view"
+    ).click()
+    page.locator('#v-drop .vchip[data-id="client|1"]').click()
+    _commit(page, "cp-prompts")
+
+    drop = page.locator("#v-drop2")
+    expect(drop.locator(".vchip.masked")).to_have_count(5)
+    lost = page.locator('[data-question="cp-lost"]')
+    lost.get_by_role("button", name="Answer on the view").click()
+    for cell in ("new|client|3", "new|client|4"):
+        drop.locator(f'.vchip[data-id="{cell}"]').click()
+    expect(lost.locator(".view-count")).to_have_text("2 selected")
+    _commit(page, "cp-lost")
+    expect(lost.locator(".outcome")).to_contain_text("Correct")
+    expect(drop.locator(".vchip.masked")).to_have_count(0)
+    expect(drop.locator(".vchip.answer")).to_have_count(2)
+
+    table = page.locator("#v-rules")
+    for at, kind in enumerate(("prompt", "thinking", "answer")):
+        table.locator("select").nth(at).select_option(label=kind)
+    _commit(page, "cp-kinds")
+    expect(table.locator(".fill-right")).to_have_count(3)
+
+    scrub = page.locator("#v-scrub")
+    scrub.locator("input[type=range]").nth(1).fill("2")
+    scrub.get_by_role("button", name="Turn 2 still running").click()
+    expect(scrub.locator('.playground-task[data-met="true"]')).to_have_count(2)
+    expect(page.locator('#v-read .playground-task[data-met="true"]')).to_have_count(1)
+
+    page.set_viewport_size({"width": _NARROW, "height": 900})
+    width = page.evaluate("document.documentElement.scrollWidth")
+    if width > _NARROW:
+        pytest.fail(f"the page scrolls sideways at 400 px: {width}")
