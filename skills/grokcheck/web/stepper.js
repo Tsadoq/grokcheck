@@ -211,5 +211,9 @@ function stepFromHash(key) {
 function writeStepToHash(key, step) {
   const params = new URLSearchParams(location.hash.slice(1));
   params.set(key, step);
-  history.replaceState(null, "", `#${params}`);
+  try {
+    history.replaceState(null, "", `#${params}`);
+  } catch {
+    return;
+  }
 }

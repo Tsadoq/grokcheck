@@ -60,7 +60,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #12141c;
     --surface: #1a1d28;
     --sunk: #232735;
@@ -86,6 +86,33 @@
     --num: #ffad75;
     color-scheme: dark;
   }
+}
+
+:root[data-theme="dark"] {
+  --bg: #12141c;
+  --surface: #1a1d28;
+  --sunk: #232735;
+  --fg: #e6e8f0;
+  --muted: #a0a5b8;
+  --line: #323748;
+  --accent: #8d9cff;
+  --accent-soft: #262c52;
+  --accent-fg: #12141c;
+  --ok: #6fd39d;
+  --ok-soft: #173a29;
+  --bad: #ff8a80;
+  --bad-soft: #3d1d1b;
+  --warn: #f2c264;
+  --warn-soft: #3a2e12;
+  --replay: #c69bff;
+  --replay-soft: #2e2346;
+  --hl: #3d3a1c;
+  --kw: #c69bff;
+  --str: #7fd8a4;
+  --cm: #7d8399;
+  --fn: #8fb4ff;
+  --num: #ffad75;
+  color-scheme: dark;
 }
 
 * {
@@ -152,6 +179,7 @@ figcaption {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .note,
@@ -195,6 +223,7 @@ header.top {
 
 #intro {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   margin-bottom: 18px;
 }
@@ -223,6 +252,11 @@ header.top {
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+.files li {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .depth {
@@ -1064,7 +1098,8 @@ blockquote {
   background: var(--sunk);
   color: var(--muted);
   font: 600 0.72rem var(--mono);
-  white-space: nowrap;
+  display: inline-block;
+  max-width: 100%;
 }
 
 .badge.warn {
@@ -1453,6 +1488,7 @@ pre.run-log {
 .options-element,
 .assumptions-element {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   min-width: 0;
 }
@@ -1463,6 +1499,7 @@ pre.run-log {
 
 .diagram-element {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   margin: 0;
   padding: 16px;
@@ -1549,6 +1586,7 @@ pre.run-log {
 
 .assumptions-element ul {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   list-style: none;
   margin: 0;
@@ -1568,6 +1606,10 @@ pre.run-log {
 
 .assumption p {
   margin: 0;
+}
+
+.assumption > * {
+  min-width: 0;
 }
 
 .assumptions-element > button {
@@ -1758,7 +1800,7 @@ pre.run-log {
   }
 
   nav.rail {
-    position: static;
+    position: relative;
     grid-auto-flow: column;
     grid-auto-columns: max-content;
     overflow-x: auto;

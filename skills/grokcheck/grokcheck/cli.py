@@ -28,6 +28,7 @@ from grokcheck import diagrams
 from grokcheck.client import ApiError, LessonClient, ServerGoneError
 from grokcheck.diffs import as_json, hunks
 from grokcheck.export import render_anki, render_obsidian
+from grokcheck.export_html import render_html
 from grokcheck.grading import Outcome
 from grokcheck.ground import VERDICTS, apply_verdicts, manifest
 from grokcheck.lesson import DiagramElement, LessonError, load_lesson
@@ -278,8 +279,11 @@ def _diagram_check(args: argparse.Namespace) -> dict[str, Any]:
 def _add_export(commands: argparse._SubParsersAction[_Parser]) -> None:
     export = commands.add_parser("export", help="write a run's misses as Anki cards")
     export.add_argument("lesson_id")
-    export.add_argument("--format", choices=("anki", "obsidian"), default="anki")
+    export.add_argument(
+        "--format", choices=("anki", "obsidian", "html"), default="anki"
+    )
     export.add_argument("--out", type=Path)
+    export.add_argument("--fragment", action="store_true")
     export.add_argument("--vault", type=Path)
     export.add_argument("--template", type=Path)
     _add_project(export)
@@ -289,6 +293,8 @@ def _add_export(commands: argparse._SubParsersAction[_Parser]) -> None:
 def _export(args: argparse.Namespace) -> dict[str, Any]:
     """Write the Anki file, by default next to `results.json`, and count its cards."""
     lesson_dir = _lesson_dir(args)
+    if args.format == "html":
+        return _export_html(args, lesson_dir)
     results_path = lesson_dir / "results.json"
     if not results_path.exists():
         msg = "the lesson has not been submitted yet"
@@ -310,6 +316,25 @@ def _export(args: argparse.Namespace) -> dict[str, Any]:
     out.write_text(text, encoding="utf-8")
     cards = sum(1 for line in text.splitlines() if not line.startswith("#"))
     return {"ok": True, "path": str(out), "cards": cards}
+
+
+def _export_html(args: argparse.Namespace, lesson_dir: Path) -> dict[str, Any]:
+    """Write the lesson as one offline HTML page, by default `lesson.html`."""
+    page = render_html(LessonRun.open(lesson_dir), _WEB_DIR, fragment=args.fragment)
+    out: Path = args.out or lesson_dir / "lesson.html"
+    out.write_text(page.text, encoding="utf-8")
+    output: dict[str, Any] = {
+        "ok": True,
+        "path": str(out),
+        "bytes": out.stat().st_size,
+        "shrunk": page.shrunk,
+        "dropped": page.dropped,
+    }
+    if page.shrunk:
+        output["note"] = "videos re-encoded at 720p to keep the file small"
+    if page.dropped:
+        output["note"] = "videos left out to keep the file small; transcripts stay"
+    return output
 
 
 def _export_obsidian(

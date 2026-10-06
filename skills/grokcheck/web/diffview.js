@@ -55,8 +55,9 @@ export function renderDiff(item, context) {
       );
       return;
     }
-    askBox.replaceChildren(element("span", { class: "status", text: `No prepared question for line ${line}. Type your own below.` }));
     const box = root.closest?.(".lesson-section")?.querySelector("aside.ask textarea");
+    const hint = box ? " Type your own below." : "";
+    askBox.replaceChildren(element("span", { class: "status", text: `No prepared question for line ${line}.${hint}` }));
     if (box) {
       box.value = `About line ${line}: `;
       box.focus();

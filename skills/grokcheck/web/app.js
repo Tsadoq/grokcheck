@@ -1,4 +1,4 @@
-import { askQuestion, fetchLesson, followReplies, sendAnswer, submitQuiz } from "./api.js";
+import { askQuestion, fetchLesson, followReplies, offline, sendAnswer, skippedOffline, submitQuiz } from "./api.js";
 import { GATING_ELEMENTS, renderElements } from "./elements.js";
 import { renderMarkdown } from "./markdown.js";
 import { codeView, element, renderQuestion, renderReveal } from "./questions.js";
@@ -144,7 +144,22 @@ function confidencePicker(questionId, onChange) {
   };
 }
 
+function skippedCard(question, label, onAnswered) {
+  queueMicrotask(() => onAnswered({ question_id: question.id, grade: null }));
+  return element("article", { class: "question", "data-question": question.id }, [
+    label ? element("span", { class: "eyebrow", text: label }) : "",
+    element("div", { class: "prompt", html: renderMarkdown(question.prompt) }),
+    element("p", {
+      class: "note",
+      text: "This question runs the project's tests, so it needs grokcheck. It is skipped here and does not count toward your score.",
+    }),
+  ]);
+}
+
 function questionCard(question, { final, label, onAnswered }) {
+  if (skippedOffline(question)) {
+    return skippedCard(question, label, onAnswered);
+  }
   const status = element("p", { class: "status", "aria-live": "polite" });
   const button = element("button", { type: "button", class: "primary", text: final ? "Save answer" : "Check answer", disabled: true });
   const update = () => {
@@ -232,7 +247,7 @@ function sectionView(section, index, count, onComplete) {
   view.append(
     element("h3", { text: "Checkpoint" }),
     ...section.checkpoints.map((question) => questionCard(question, { final: false, label: "Checkpoint", onAnswered: passGate })),
-    askPanel(section, view),
+    offline ? "" : askPanel(section, view),
   );
   return view;
 }
@@ -277,7 +292,7 @@ function probeStage(lesson, onDone) {
           final: false,
           label: "Probe",
           onAnswered: (result) => {
-            anyWrong ||= result.grade.outcome !== "correct";
+            anyWrong ||= result.grade !== null && result.grade.outcome !== "correct";
             remaining -= 1;
             if (remaining === 0) {
               onDone(anyWrong);
@@ -380,9 +395,11 @@ function showResults(lesson, results) {
     element("div", { class: "head" }, [element("p", { class: "eyebrow", text: "Debrief" }), element("h2", { text: "Results" })]),
     element("p", { class: "score", text: `Final quiz score: ${Math.round(summary.final_score * 100)}%` }),
     summary.confident_wrong.length > 0
-      ? element("p", { text: `You were sure but not right on ${summary.confident_wrong.length} question(s); your agent will start there.` })
+      ? element("p", {
+          text: `You were sure but not right on ${summary.confident_wrong.length} question(s)${offline ? "." : "; your agent will start there."}`,
+        })
       : "",
-    summary.needs_review.length + summary.self_rated.length > 0
+    !offline && summary.needs_review.length + summary.self_rated.length > 0
       ? element("p", { text: "Your agent will re-grade your free-text answers in the chat." })
       : "",
     element("h3", { text: "Final quiz" }),

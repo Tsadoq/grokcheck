@@ -4,7 +4,9 @@ A chapter script is JSON written by an agent from one `ChapterSpec`:
 `{concept_id, chapter_id, title, word_budget, beats}`, where each beat is
 `{say, show, code?, language?, claims?}`: one narration sentence, the text on
 screen while it plays, whether that text is code and in which language
-(Python by default), and claims shaped like lesson claims.
+(Python by default), and claims shaped like lesson claims. A script may add one
+`scene` that stays on screen; its beats then say what changes in it (see
+`scene.py`), and `show` becomes an optional caption.
 """
 
 from __future__ import annotations
@@ -25,7 +27,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from grokcheck.lesson import VIDEO_CACHE_DIR
 
-from grokcheck_media import checks, tts
+from grokcheck_media import checks, scene, tts
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -46,6 +48,12 @@ _INLINE_ITEMS = re.compile(r"\s{2,}(?=\d+[.)]\s)|\s+\|\s+")
 _MAX_NODES = 4
 _WRAP = {"text": 30, "list": 44, "flow": 14}
 _WRAP_LONG_FLOW = 9
+_MAX_SAY_WORDS = 25
+_MAX_IDENTIFIERS = 2
+_CAMEL = re.compile(r"\b[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]*)+\b|\b[a-z]+[A-Z]\w*")
+_SPLIT_CLASS = re.compile(r"(?<=[a-z,] )[A-Z][a-z]+(?: [A-Z][a-z]+){2,}")
+_DOTTED = re.compile(r"\b[A-Za-z_]\w*\.[A-Za-z_]\w*|\b\w+ dot \w+")
+_IDENTIFIER = re.compile(r"(?<![\w-])_*[A-Za-z]\w*_\w*|\b\w+\(\)|(?<![\w-])_\w+")
 
 
 @dataclass(frozen=True)
@@ -122,13 +130,42 @@ def lint_script(script: dict[str, Any]) -> list[str]:
         f"beats[{index}].{key} must be a non-empty string"
         for index, beat in enumerate(beats)
         for key in ("say", "show")
-        if not isinstance(beat.get(key), str) or not beat[key].strip()
+        if (key == "say" or "scene" not in script or beat.get("code"))
+        and (not isinstance(beat.get(key), str) or not beat[key].strip())
     ]
+    problems += scene.check_script(script.get("scene"), beats)
+    problems += _narration_problems([str(beat.get("say", "")) for beat in beats])
     words = sum(len(str(beat.get("say", "")).split()) for beat in beats)
     budget = script["word_budget"]
     if words > budget * _OVER_BUDGET:
         problems.append(
             f"the narration has {words} words, over 20% above its budget of {budget}"
+        )
+    return problems
+
+
+def _narration_problems(says: Sequence[str]) -> list[str]:
+    """Refuse long sentences, read-out class names, dot chains, and identifier soup."""
+    problems = []
+    named: dict[str, None] = {}
+    for index, say in enumerate(says):
+        at = f"beats[{index}].say"
+        words = len(say.split())
+        if words > _MAX_SAY_WORDS:
+            problems.append(
+                f"{at} has {words} words; split it, keep sentences to about 20"
+            )
+        problems += [
+            f"{at} reads out {found!r}; say what it means in plain words"
+            for pattern in (_CAMEL, _SPLIT_CLASS, _DOTTED)
+            for found in pattern.findall(say)
+        ]
+        named |= dict.fromkeys(_IDENTIFIER.findall(say))
+    if len(named) > _MAX_IDENTIFIERS:
+        problems.append(
+            f"the narration names {len(named)} identifiers ({', '.join(named)});"
+            f" keep the {_MAX_IDENTIFIERS} the viewer must recognise and describe"
+            " the rest"
         )
     return problems
 
@@ -151,17 +188,20 @@ def build_chapter(
     problems = lint_script(script)
     if problems:
         raise ValueError("; ".join(problems))
+    if "scene" in script and renderer != "manim":
+        msg = "a chapter with a scene needs --renderer manim"
+        raise ValueError(msg)
     rendered = [
         {
             "say": beat["say"],
-            "frame": frame(
-                beat["show"], code=bool(beat.get("code")), language=beat.get("language")
-            ),
+            **_drawn(beat, scened="scene" in script),
+            **{key: beat[key] for key in scene.CHANGES if key in beat},
         }
         for beat in script["beats"]
     ]
-    scene = hashlib.sha256(_MANIM_SCENE.read_bytes()).hexdigest()
-    key = json.dumps([script["title"], rendered, renderer, scene])
+    drawn_scene = _scene(script)
+    code = hashlib.sha256(_MANIM_SCENE.read_bytes()).hexdigest()
+    key = json.dumps([script["title"], rendered, drawn_scene, renderer, code])
     sha = hashlib.sha256(key.encode()).hexdigest()[:16]
     cache = VIDEO_CACHE_DIR / script["concept_id"] / script["chapter_id"] / sha
     cached = (cache / "chapter.json").is_file()
@@ -272,7 +312,7 @@ def _render(
         for beat, wav, length in zip(beats, audio, seconds, strict=True)
     ]
     if renderer == "manim":
-        _manim(script["title"], timed, work, video)
+        _manim(script, timed, work, video)
     else:
         _hyperframes(timed, cues, work, video)
     duration = sum(seconds)
@@ -351,23 +391,54 @@ def _wrap(text: str, width: int) -> list[str]:
     return lines or [text]
 
 
-def _manim(title: str, beats: list[dict[str, Any]], work: Path, video: Path) -> None:
-    scene = work / "scene.py"
-    shutil.copyfile(_MANIM_SCENE, scene)
+def _drawn(beat: dict[str, Any], *, scened: bool) -> dict[str, Any]:
+    """Return a beat's frame, or with a scene its code panel and caption."""
+    code = bool(beat.get("code"))
+    if not scened:
+        return {"frame": frame(beat["show"], code=code, language=beat.get("language"))}
+    return {
+        "code": frame(beat["show"], code=True, language=beat.get("language"))
+        if code
+        else None,
+        "caption": [] if code else scene.caption(beat.get("show")),
+    }
+
+
+def _scene(script: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the script's normalised scene with its layout, or None."""
+    if "scene" not in script:
+        return None
+    drawn = scene.normalise(script["scene"])
+    return {**drawn, **scene.layout(drawn)}
+
+
+def _manim(
+    script: dict[str, Any], beats: list[dict[str, Any]], work: Path, video: Path
+) -> None:
+    scene_file = work / "scene.py"
+    shutil.copyfile(_MANIM_SCENE, scene_file)
+    drawn_scene = _scene(script)
+    steps = (
+        scene.plan(drawn_scene, beats, [b["seconds"] for b in beats])
+        if drawn_scene
+        else [None] * len(beats)
+    )
     drawn = [
         {
-            "frame": frame(b["show"], code=b["code"], language=b.get("language")),
+            **_drawn(b, scened=drawn_scene is not None),
+            "step": step,
             "wav": b["wav"],
             "seconds": b["seconds"],
         }
-        for b in beats
+        for b, step in zip(beats, steps, strict=True)
     ]
     (work / "beats.json").write_text(
-        json.dumps({"title": title, "beats": drawn}), encoding="utf-8"
+        json.dumps({"title": script["title"], "scene": drawn_scene, "beats": drawn}),
+        encoding="utf-8",
     )
     media = work / "media"
     command = ["manim", "render", "--resolution", "1920,1080", "--frame_rate", "30"]
-    command += ["--media_dir", str(media), "-o", "chapter", str(scene), "Chapter"]
+    command += ["--media_dir", str(media), "-o", "chapter", str(scene_file), "Chapter"]
     _run(command, cwd=work)
     shutil.move(next(media.rglob("chapter.mp4")), video)
 
@@ -383,7 +454,7 @@ def _hyperframes(
         tag = "pre" if beat["code"] else "p"
         clips.append(
             f'<div class="clip beat" {timing} data-track-index="0">'
-            f"<{tag}>{html.escape(beat['show'])}</{tag}></div>"
+            f"<{tag}>{html.escape(beat.get('show', ''))}</{tag}></div>"
             f'<audio {timing} data-track-index="1"'
             f' src="{Path(beat["wav"]).name}"></audio>'
         )

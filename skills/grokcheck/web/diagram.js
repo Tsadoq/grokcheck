@@ -12,6 +12,7 @@ const THEME_TOKENS = {
   lineColor: "--muted",
   secondaryColor: "--border",
   tertiaryColor: "--bg",
+  edgeLabelBackground: "--bg",
 };
 
 let loading = null;

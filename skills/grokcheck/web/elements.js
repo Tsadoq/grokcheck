@@ -1,4 +1,4 @@
-import { askLine, commitOptions, sendAnswer } from "./api.js";
+import { askLine, commitOptions, mediaUrl, sendAnswer } from "./api.js";
 import { renderDiagram } from "./diagram.js";
 import { renderDiff } from "./diffview.js";
 import { renderMarkdown } from "./markdown.js";
@@ -261,13 +261,14 @@ function renderAssumptions(item, context) {
 }
 
 function renderVideo(item) {
-  const token = new URLSearchParams(globalThis.location?.hash.slice(1)).get("t") ?? "";
-  const media = (file) =>
-    `/api/media?element=${encodeURIComponent(item.id)}&file=${file}&t=${encodeURIComponent(token)}`;
+  const video = mediaUrl(item.id, "video");
+  const captions = mediaUrl(item.id, "captions");
   return element("figure", { class: "video-element" }, [
-    element("video", { controls: true, preload: "metadata", style: "max-width: 100%", src: media("video") }, [
-      element("track", { kind: "captions", srclang: "en", label: "Captions", src: media("captions"), default: true }),
-    ]),
+    video
+      ? element("video", { controls: true, preload: "metadata", style: "max-width: 100%", src: video }, [
+          captions ? element("track", { kind: "captions", srclang: "en", label: "Captions", src: captions, default: true }) : "",
+        ])
+      : element("p", { class: "note", text: "This video was left out of the export to keep the file small. Its transcript follows." }),
     element("details", {}, [
       element("summary", { text: "Transcript" }),
       element("p", { text: item.transcript }),

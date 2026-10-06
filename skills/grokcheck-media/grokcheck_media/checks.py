@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Any
 from grokcheck.ground import manifest_entry
 from grokcheck.lesson import BACKING_CLASSES, Claim
 
+from grokcheck_media import tts
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
@@ -91,7 +93,9 @@ def diff(script: Sequence[str], heard: Sequence[str]) -> list[Difference]:
     """Compare each script sentence with its transcript, ignoring spelling noise.
 
     Case, punctuation, US against UK spelling and digits against spoken numbers
-    are not differences. A sentence missing from `heard` is heard as "".
+    are not differences, and neither is a word `tts.spoken` respells
+    ("JSON" against "jason", "409 conflict" against "four oh nine conflict").
+    A sentence missing from `heard` is heard as "".
     """
     differences = []
     for index, expected in enumerate(script):
@@ -151,7 +155,9 @@ def _claim(raw: dict[str, Any]) -> Claim:
 
 
 def _words(sentence: str) -> list[str]:
-    text = _NUMBER.sub(lambda match: f" {_spoken(match.group())} ", sentence.lower())
+    text = _NUMBER.sub(
+        lambda match: f" {_spoken(match.group())} ", tts.spoken(sentence).lower()
+    )
     words = re.sub(r"[^a-z0-9' ]", " ", text.replace("-", " ")).replace("'", "")
     return [_uk(word) for word in words.split()]
 

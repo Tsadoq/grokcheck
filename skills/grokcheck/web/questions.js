@@ -8,6 +8,7 @@ const OUTCOME_LABELS = {
   partial: "Partly correct",
   needs_review: "Needs review: your agent will check this answer",
   self_rated: "Self-rated",
+  skipped: "Skipped: needs grokcheck to run the tests",
 };
 
 export const REVEAL_EVENT = "grokcheck:reveal";
@@ -447,7 +448,7 @@ export function renderReveal(question, grade) {
   const parts = [
     element("p", { class: `outcome outcome-${outcome}` }, [
       element("strong", { text: OUTCOME_LABELS[outcome] ?? outcome }),
-      outcome === "correct" || outcome === "incorrect" ? "" : ` (score ${Math.round(score * 100)}%)`,
+      ["correct", "incorrect", "skipped"].includes(outcome) ? "" : ` (score ${Math.round(score * 100)}%)`,
     ]),
   ];
   if (reveal.why.length > 0) {

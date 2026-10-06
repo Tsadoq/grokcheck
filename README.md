@@ -195,6 +195,8 @@ Submitting a lesson schedules every missed or confident-wrong question for a re-
 
 To keep the misses outside grokcheck, ask for an export: `grokcheck export <lesson-id> --format anki` writes a tab-separated file Anki imports, and `--format obsidian --vault <folder>` writes one new note into an Obsidian vault without touching the notes already there.
 
+To share a lesson with someone who has no grokcheck, `grokcheck export <lesson-id> --format html [--out <file>]` writes the lesson page as one HTML file that opens from disk with no server: the same design, gates, diagrams, stepper, videos, final quiz and debrief, graded in the browser. The file carries the answer keys, so give it to readers, not to people you are testing. Asking questions, Socratic mode and the agent's re-grading of free-text answers need the agent and do not work offline, and mutation and fix-the-bug questions, which run the project's tests, are shown as skipped and left out of the score. Videos are re-encoded at 720p, or left out with their transcript kept, when the file would pass 14 MB. `--fragment` writes the page without the document tags, for a host page that wraps it.
+
 When the code or the discussion has moved on since a lesson, ask the agent to refresh it. `grokcheck refresh` reruns the lesson's experiments and reports which claims no longer match the code, so only those sections are rewritten.
 
 ### Where lessons are stored

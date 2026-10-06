@@ -14,12 +14,61 @@ from typing import TYPE_CHECKING
 from grokcheck_media import env
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
 _ELEVENLABS_VOICE = "21m00Tcm4TlvDq8ikWAM"
 _ELEVENLABS_RATE = 22050
 _CLOUD_SECONDS = 60.0
-_SPOKEN = (
+_DIGITS = ("oh", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine")
+_TEENS = (
+    "ten",
+    "eleven",
+    "twelve",
+    "thirteen",
+    "fourteen",
+    "fifteen",
+    "sixteen",
+    "seventeen",
+    "eighteen",
+    "nineteen",
+)
+_TENS = ("", "", "twenty", "thirty", "forty", "fifty")
+_REASONS = (
+    "ok|created|accepted|no content|moved permanently|found|not modified|"
+    "bad request|unauthorized|forbidden|not found|method not allowed|conflict|gone|"
+    "unprocessable|unprocessable content|too many requests|internal server error|"
+    "bad gateway|service unavailable|gateway timeout"
+)
+_STATUS = re.compile(rf"\b([2-5]\d\d)\b(?=,?\s+(?:{_REASONS})\b)", re.IGNORECASE)
+
+
+def _status(match: re.Match[str]) -> str:
+    head, tens, ones = (int(digit) for digit in match.group(1))
+    if tens == ones == 0:
+        tail = "hundred"
+    elif tens == 0:
+        tail = f"oh {_DIGITS[ones]}"
+    elif tens == 1:
+        tail = _TEENS[ones]
+    else:
+        tail = f"{_TENS[tens]} {_DIGITS[ones]}" if ones else _TENS[tens]
+    return f"{_DIGITS[head]} {tail}"
+
+
+PRONUNCIATIONS = (
+    (re.compile(r"\bgrokcheck\b", re.IGNORECASE), "grok check"),
+    (re.compile(r"\bkeepalive\b", re.IGNORECASE), "keep-alive"),
+    (re.compile(r"\bsubagent(s?)\b", re.IGNORECASE), r"sub-agent\1"),
+    (re.compile(r"\bLast-Event-ID\b", re.IGNORECASE), "last event I D"),
+    (re.compile(r"\bID\b"), "I D"),
+    (re.compile(r"\bSSE\b"), "S S E"),
+    (re.compile(r"\bJSON\b"), "jason"),
+    (re.compile(r"\bAPI(s?)\b"), r"A P I\1"),
+)
+_SPOKEN: tuple[tuple[re.Pattern[str], str | Callable[[re.Match[str]], str]], ...] = (
+    *PRONUNCIATIONS,
+    (_STATUS, _status),
     (re.compile(r"__(\w+?)__"), r"dunder \1"),
     (re.compile(r"\(\)"), ""),
     (re.compile(r"(?<=\w)\.(?=\w)"), " dot "),
@@ -48,7 +97,12 @@ def synthesise(sentence: str, out: Path, *, allow_cloud: bool = False) -> Path |
 
 
 def spoken(sentence: str) -> str:
-    """Return `sentence` with code identifiers spelled as a narrator says them."""
+    """Return `sentence` as the narrator says it.
+
+    Product names and acronyms follow `PRONUNCIATIONS`, an HTTP status before
+    its reason is read like "four oh nine conflict", and code identifiers lose
+    their dots, underscores and dunders.
+    """
     for pattern, replacement in _SPOKEN:
         sentence = pattern.sub(replacement, sentence)
     return sentence
