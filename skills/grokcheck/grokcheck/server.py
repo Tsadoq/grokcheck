@@ -11,20 +11,22 @@ from __future__ import annotations
 import dataclasses
 import hmac
 import json
+import re
 import threading
 import time
 from datetime import UTC, datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import TYPE_CHECKING, Any, ClassVar, get_args
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, ClassVar, cast, get_args
 from urllib.parse import parse_qs, urlsplit
 
 from grokcheck.grading import Confidence, ResponseError
-from grokcheck.run import RunError
+from grokcheck.lesson import VideoElement
+from grokcheck.run import RunError, public_view_for
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
-    from pathlib import Path
 
     from grokcheck.run import LessonRun
 
@@ -36,6 +38,9 @@ MAX_POLL_SECONDS = 30 * 60
 _LOCAL_HOSTNAMES = frozenset({"127.0.0.1", "localhost", "::1"})
 _TOKEN_HEADER = "X-Grokcheck-Token"  # noqa: S105
 _WATCHDOG_INTERVAL_SECONDS = 15.0
+_MEDIA_PATH = "/api/media"
+_MEDIA_SPAN_BYTES = 8 * 1024 * 1024
+_BYTE_RANGE = re.compile(r"bytes=(\d*)-(\d*)")
 _WEB_FILES: dict[str, tuple[str, str]] = {
     "/": ("index.html", "text/html; charset=utf-8"),
     "/index.html": ("index.html", "text/html; charset=utf-8"),
@@ -45,6 +50,11 @@ _WEB_FILES: dict[str, tuple[str, str]] = {
     "/questions.js": ("questions.js", "text/javascript; charset=utf-8"),
     "/markdown.js": ("markdown.js", "text/javascript; charset=utf-8"),
     "/codeview.js": ("codeview.js", "text/javascript; charset=utf-8"),
+    "/elements.js": ("elements.js", "text/javascript; charset=utf-8"),
+    "/storage.js": ("storage.js", "text/javascript; charset=utf-8"),
+    "/stepper.js": ("stepper.js", "text/javascript; charset=utf-8"),
+    "/diffview.js": ("diffview.js", "text/javascript; charset=utf-8"),
+    "/playground.js": ("playground.js", "text/javascript; charset=utf-8"),
     "/vendor/highlight/highlight.min.js": (
         "vendor/highlight/highlight.min.js",
         "text/javascript; charset=utf-8",
@@ -56,6 +66,11 @@ _WEB_FILES: dict[str, tuple[str, str]] = {
     "/vendor/highlight/github-dark.min.css": (
         "vendor/highlight/github-dark.min.css",
         "text/css; charset=utf-8",
+    ),
+    "/diagram.js": ("diagram.js", "text/javascript; charset=utf-8"),
+    "/vendor/mermaid/mermaid.tiny.js": (
+        "vendor/mermaid/mermaid.tiny.js",
+        "text/javascript; charset=utf-8",
     ),
 }
 
@@ -107,6 +122,8 @@ class _LessonServer(ThreadingHTTPServer):
         self.token = ""
         self.lifetime = _Lifetime(submitted=run.submitted)
         self.log_lock = threading.Lock()
+        self.running_lock = threading.Lock()
+        self.running: set[str] = set()
 
     def stop_soon(self) -> None:
         """Stop `serve_forever` from a thread other than the one running it."""
@@ -174,7 +191,9 @@ class _Handler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         try:
             self._guard(path)
-            if path.startswith("/api/"):
+            if method == "GET" and path == _MEDIA_PATH:
+                self._send_media()
+            elif path.startswith("/api/"):
                 self._send_json(HTTPStatus.OK, self._route(method, path))
             else:
                 self._send_web_file(method, path)
@@ -201,11 +220,14 @@ class _Handler(BaseHTTPRequestHandler):
         origin = self.headers.get("Origin")
         if origin is not None and origin != f"http://{host}":
             raise _RequestError(HTTPStatus.FORBIDDEN, "foreign Origin")
-        if path.startswith("/api/") and not self._authorised():
+        if path.startswith("/api/") and not self._authorised(path):
             raise _RequestError(HTTPStatus.FORBIDDEN, "missing or wrong token")
 
-    def _authorised(self) -> bool:
+    def _authorised(self, path: str) -> bool:
+        """Check the token header, or for media the `t` query a `<video>` can send."""
         sent = self.headers.get(_TOKEN_HEADER, "")
+        if path == _MEDIA_PATH and not sent:
+            sent = parse_qs(urlsplit(self.path).query).get("t", [""])[0]
         return bool(self.server.token) and hmac.compare_digest(
             sent.encode(), self.server.token.encode()
         )
@@ -261,7 +283,7 @@ class _Handler(BaseHTTPRequestHandler):
         return after, min(timeout, MAX_POLL_SECONDS)
 
     def _get_lesson(self) -> object:
-        return self.server.run.lesson.public_view()
+        return public_view_for(self.server.run)
 
     def _get_replies(self) -> object:
         after, timeout = self._query()
@@ -274,22 +296,54 @@ class _Handler(BaseHTTPRequestHandler):
         return {"events": [event.as_json() for event in events]}
 
     def _post_answer(self, body: dict[str, Any]) -> object:
-        confidence = body.get("confidence")
-        if confidence is not None and confidence not in get_args(Confidence):
-            msg = f"'confidence' must be one of {', '.join(get_args(Confidence))}"
-            raise _RequestError(HTTPStatus.BAD_REQUEST, msg)
         feedback = self.server.run.answer(
-            _required_str(body, "question_id"), _required(body, "response"), confidence
+            _required_str(body, "question_id"),
+            _required(body, "response"),
+            _confidence(body),
         )
         return dataclasses.asdict(feedback)
+
+    def _post_run(self, body: dict[str, Any]) -> object:
+        """Run a `fix_the_bug` question's tests; one run per question at a time.
+
+        Answers with the `Feedback` plus `run`, the pass and log the reader sees
+        even when a final question's grade is withheld.
+        """
+        question_id = _required_str(body, "question_id")
+        confidence = _confidence(body)
+        server = self.server
+        with server.running_lock:
+            if question_id in server.running:
+                msg = f"the tests of '{question_id}' are already running"
+                raise _RequestError(HTTPStatus.CONFLICT, msg)
+            server.running.add(question_id)
+        try:
+            outcome, feedback = server.run.run_tests(question_id, confidence)
+        finally:
+            with server.running_lock:
+                server.running.discard(question_id)
+        return {**dataclasses.asdict(feedback), "run": dataclasses.asdict(outcome)}
 
     def _post_question(self, body: dict[str, Any]) -> object:
         thread = self.server.run.ask(
             _required_str(body, "section_id"),
             _optional_str(body, "selection"),
             _required_str(body, "text"),
+            _optional_str(body, "mode") or "answer",
         )
         return dataclasses.asdict(thread)
+
+    def _post_ask_line(self, body: dict[str, Any]) -> object:
+        line = body.get("line")
+        if not isinstance(line, int) or isinstance(line, bool):
+            raise _RequestError(HTTPStatus.BAD_REQUEST, "'line' must be an integer")
+        ask = self.server.run.ask_line(_required_str(body, "element_id"), line)
+        return {} if ask is None else {"question": ask.question, "answer": ask.answer}
+
+    def _post_commit(self, body: dict[str, Any]) -> object:
+        return self.server.run.commit(
+            _required_str(body, "element_id"), _required_str(body, "text")
+        )
 
     def _post_reply(self, body: dict[str, Any]) -> object:
         reply = self.server.run.reply(
@@ -339,9 +393,55 @@ class _Handler(BaseHTTPRequestHandler):
         payload = json.dumps(value).encode()
         self._send(status, "application/json", payload)
 
-    def _send(self, status: HTTPStatus, content_type: str, payload: bytes) -> None:
+    def _send_media(self) -> None:
+        """Send the file of video `element`: `file=captions` for its WebVTT track.
+
+        Only files the loaded lesson names are readable. A `Range` request gets
+        at most `_MEDIA_SPAN_BYTES` back, which a video element asks past.
+        """
+        query = parse_qs(urlsplit(self.path).query)
+        element_id = query.get("element", [""])[0]
+        video = next(
+            (
+                element
+                for section in self.server.run.lesson.sections
+                for element in section.elements
+                if isinstance(element, VideoElement) and element.id == element_id
+            ),
+            None,
+        )
+        if video is None:
+            raise _RequestError(HTTPStatus.NOT_FOUND, "no such video")
+        if query.get("file", ["video"])[0] == "captions":
+            file, content_type = Path(video.captions), "text/vtt; charset=utf-8"
+        else:
+            file, content_type = Path(video.src), "video/mp4"
+        try:
+            size = file.stat().st_size
+            span = _byte_range(self.headers.get("Range"), size)
+            with file.open("rb") as media:
+                media.seek(span[0] if span else 0)
+                payload = media.read(span[1] - span[0] + 1 if span else size)
+        except OSError as error:
+            raise _RequestError(HTTPStatus.NOT_FOUND, "media file is gone") from error
+        headers = {"Accept-Ranges": "bytes"}
+        if span is None:
+            self._send(HTTPStatus.OK, content_type, payload, headers)
+            return
+        headers["Content-Range"] = f"bytes {span[0]}-{span[1]}/{size}"
+        self._send(HTTPStatus.PARTIAL_CONTENT, content_type, payload, headers)
+
+    def _send(
+        self,
+        status: HTTPStatus,
+        content_type: str,
+        payload: bytes,
+        headers: Mapping[str, str] | None = None,
+    ) -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
         self.send_header("Content-Length", str(len(payload)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
@@ -357,11 +457,35 @@ _Handler._GET_ROUTES = {  # noqa: SLF001
 }
 _Handler._POST_ROUTES = {  # noqa: SLF001
     "/api/answer": _Handler._post_answer,  # noqa: SLF001
+    "/api/run": _Handler._post_run,  # noqa: SLF001
     "/api/question": _Handler._post_question,  # noqa: SLF001
     "/api/reply": _Handler._post_reply,  # noqa: SLF001
+    "/api/ask-line": _Handler._post_ask_line,  # noqa: SLF001
+    "/api/commit": _Handler._post_commit,  # noqa: SLF001
     "/api/submit": _Handler._post_submit,  # noqa: SLF001
     "/api/stop": _Handler._post_stop,  # noqa: SLF001
 }
+
+
+def _byte_range(header: str | None, size: int) -> tuple[int, int] | None:
+    """Return the inclusive byte span a `Range` header asks of a `size`-byte file.
+
+    None means no header; an unsatisfiable or malformed one is a 416.
+    """
+    if header is None:
+        return None
+    match = _BYTE_RANGE.fullmatch(header.strip())
+    if match is None or match.groups() == ("", ""):
+        raise _RequestError(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE, "bad Range")
+    first, last = match.groups()
+    if first:
+        start, end = int(first), int(last) if last else size - 1
+    else:
+        start, end = max(size - int(last), 0), size - 1
+    end = min(end, size - 1, start + _MEDIA_SPAN_BYTES - 1)
+    if start > end:
+        raise _RequestError(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE, "bad Range")
+    return start, end
 
 
 def _hostname(host: str) -> str | None:
@@ -370,6 +494,14 @@ def _hostname(host: str) -> str | None:
         return urlsplit(f"//{host}").hostname
     except ValueError:
         return None
+
+
+def _confidence(body: Mapping[str, Any]) -> Confidence | None:
+    confidence = body.get("confidence")
+    if confidence is not None and confidence not in get_args(Confidence):
+        msg = f"'confidence' must be one of {', '.join(get_args(Confidence))}"
+        raise _RequestError(HTTPStatus.BAD_REQUEST, msg)
+    return cast("Confidence | None", confidence)
 
 
 def _required_str(body: Mapping[str, Any], key: str) -> str:

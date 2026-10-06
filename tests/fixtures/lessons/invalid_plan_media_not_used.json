@@ -1,0 +1,35 @@
+{
+  "schema_version": 2,
+  "title": "Plan names a medium no section uses",
+  "scope": {"summary": "One inline snippet.", "files": []},
+  "plan": {
+    "subject": "concept",
+    "time_budget": 5,
+    "content": ["behaviour"],
+    "media": ["trace"],
+    "rejected": [],
+    "rationale": ["A trace would show the order of calls."],
+    "default_depth": "short"
+  },
+  "sections": [
+    {
+      "id": "only",
+      "title": "Only",
+      "body": "One section.",
+      "checkpoints": [
+        {
+          "id": "cp-1",
+          "type": "single_choice",
+          "prompt": "Which?",
+          "options": [{"text": "a", "why": "first"}, {"text": "b", "why": "second"}],
+          "correct": 0
+        }
+      ]
+    }
+  ],
+  "final": [
+    {"id": "f-1", "type": "single_choice", "prompt": "Which?", "options": [{"text": "a", "why": "first"}, {"text": "b", "why": "second"}], "correct": 0},
+    {"id": "f-2", "type": "single_choice", "prompt": "Which?", "options": [{"text": "a", "why": "first"}, {"text": "b", "why": "second"}], "correct": 0},
+    {"id": "f-3", "type": "single_choice", "prompt": "Which?", "options": [{"text": "a", "why": "first"}, {"text": "b", "why": "second"}], "correct": 0}
+  ]
+}

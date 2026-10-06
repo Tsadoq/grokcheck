@@ -7,7 +7,7 @@ export function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, (char) => HTML_ESCAPES[char]);
 }
 
-function highlight(text, language) {
+export function highlight(text, language) {
   const hljs = globalThis.hljs;
   if (!language || !hljs || !hljs.getLanguage(language)) {
     return escapeHtml(text);

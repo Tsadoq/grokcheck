@@ -1,7 +1,7 @@
 {
   "name": "grokcheck",
-  "version": "0.1.0",
-  "description": "Turns a piece of code into an interactive lesson in the browser, then checks understanding with a live quiz.",
+  "version": "0.2.0",
+  "description": "Turns a change, an area of code, a library, a choice or a document into an interactive browser lesson with checked claims, gated checkpoints, a live quiz and spaced re-tests, plus an optional skill for decks and videos.",
   "author": {
     "name": "tsadoq"
   },
@@ -12,6 +12,11 @@
     "learning",
     "code-comprehension",
     "quiz",
-    "skill"
+    "skill",
+    "spaced-repetition",
+    "code-review",
+    "onboarding",
+    "diagrams",
+    "video"
   ]
 }

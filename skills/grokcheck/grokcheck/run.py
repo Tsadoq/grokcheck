@@ -7,7 +7,8 @@ A `LessonRun` owns `<project>/.grokcheck/lessons/<lesson-id>/`:
 - `events.jsonl`: every answer, question, reply and submit, one JSON record per
   line, numbered by a sequence `seq` starting at 1. `LessonRun.open` replays it.
 - `session.json`: how to reach the server that hosts the run (mode 0600).
-- `results.json` and `lesson.md`: written on submit.
+- `results.json` and `lesson.md`: written on submit, which also updates
+  `<project>/.grokcheck/schedule.json`.
 
 Every method is safe to call from concurrent request threads.
 """
@@ -15,6 +16,7 @@ Every method is safe to call from concurrent request threads.
 from __future__ import annotations
 
 import dataclasses
+import functools
 import json
 import os
 import random
@@ -24,49 +26,50 @@ import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from types import UnionType
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Literal,
+    TypeGuard,
+    Union,
+    cast,
+    get_args,
+    get_origin,
+    get_type_hints,
+)
 
-from grokcheck.export import QuestionThread, render_markdown
-from grokcheck.grading import grade, summarise
+from grokcheck.export import QuestionMode, QuestionThread, render_markdown
+from grokcheck.grading import Confidence, ResponseError, grade, summarise
 from grokcheck.lesson import (
-    Blank,
-    CodeBlock,
-    FillBlank,
+    AssumptionsElement,
+    DiffElement,
+    FixTheBug,
+    GatedElement,
     Lesson,
+    LineAsk,
     MultipleChoice,
-    OpenAnswer,
-    Option,
-    OrderSteps,
-    PickLine,
+    OptionsElement,
     PredictOutput,
-    Scope,
-    Section,
     SingleChoice,
 )
+from grokcheck.mutate import ANSI_ESCAPE, LOG_TAIL_CHARS, MutationError
+from grokcheck.mutate import run_tests as run_test_command
+from grokcheck.schedule import Schedule
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
-    from grokcheck.grading import Confidence, Grade, Response, Summary
-    from grokcheck.lesson import Question
+    from _typeshed import DataclassInstance
 
-EventType = Literal["answer", "question", "reply", "submitted"]
+    from grokcheck.grading import Grade, Response, Summary
+    from grokcheck.lesson import Element, Question
+
+EventType = Literal["answer", "question", "reply", "submitted", "ask_line", "commit"]
 
 DEFAULT_RETAKE = frozenset({"incorrect", "partial", "needs_review", "confident_wrong"})
 
 _AGENT_EVENTS = frozenset({"question", "submitted"})
-_QUESTION_TYPES: dict[str, type[Question]] = {
-    cls.type_name: cls
-    for cls in (
-        SingleChoice,
-        MultipleChoice,
-        OpenAnswer,
-        PredictOutput,
-        PickLine,
-        OrderSteps,
-        FillBlank,
-    )
-}
 
 
 class RunError(Exception):
@@ -77,8 +80,10 @@ class RunError(Exception):
 class Event:
     """One entry of the run's log; `body` holds the fields of its `type`.
 
-    `question`: `question_id`, `section_id`, `selection`, `text`.
+    `question`: `question_id`, `section_id`, `selection`, `text`, `mode`.
     `submitted`: `results_path` and `summary`.
+    `ask_line`: `question_id`, `element_id`, `line`; a prepared line ask was read.
+    `commit`: `element_id`, `text`; the reader's own options before the table.
     `answer` and `reply` are logged for replay and for the browser's replies.
     """
 
@@ -104,8 +109,8 @@ class Reply:
 class Feedback:
     """What the reader sees after answering.
 
-    `grade` carries the full reveal for a checkpoint question and is `None` for
-    a final question, whose grade is withheld until submit.
+    `grade` carries the full reveal for a checkpoint or probe question and is
+    `None` for a final question, whose grade is withheld until submit.
     """
 
     question_id: str
@@ -140,7 +145,22 @@ class LessonRun:
             for question in section.checkpoints
         }
         self._finals = {question.id: question for question in lesson.final}
+        self._probes = {question.id: question for question in lesson.probe}
         self._sections = {section.id for section in lesson.sections}
+        self._gated_elements = [
+            element
+            for section in lesson.sections
+            for element in section.elements
+            if isinstance(element, GatedElement) and element.gate
+        ]
+        self._diffs = _diffs_by_id(lesson)
+        elements = [e for section in lesson.sections for e in section.elements]
+        self._options = {e.id: e for e in elements if isinstance(e, OptionsElement)}
+        self._assumptions = {
+            e.id: e for e in elements if isinstance(e, AssumptionsElement)
+        }
+        self._commits: dict[str, str] = {}
+        self._ratings: dict[str, list[Confidence]] = {}
 
     @classmethod
     def create(cls, lesson: Lesson, project_root: Path) -> LessonRun:
@@ -220,6 +240,12 @@ class LessonRun:
         return self.lesson_dir.name
 
     @property
+    def grades(self) -> dict[str, Grade]:
+        """The latest grade of every answered question, by question id."""
+        with self._changed:
+            return dict(self._grades)
+
+    @property
     def submitted(self) -> bool:
         """Whether the reader has submitted the final quiz."""
         with self._changed:
@@ -251,8 +277,42 @@ class LessonRun:
     ) -> Feedback:
         """Record the reader's answer; a later answer to the same question replaces it.
 
-        Raises `grading.ResponseError` when `response` has the wrong shape.
+        Raises `grading.ResponseError` when `response` has the wrong shape, or
+        when the question is a `fix_the_bug`, which only `run_tests` answers.
+        An assumptions element is answered by its id, with one confidence per
+        item as `response`, and is never graded.
         """
+        if question_id in self._assumptions:
+            return self._rate(question_id, response)
+        if isinstance(self._question(question_id), FixTheBug):
+            msg = f"'{question_id}' is graded by running its tests: use /api/run"
+            raise ResponseError(msg)
+        return self._answer(question_id, response, confidence)
+
+    def _rate(self, element_id: str, response: Response) -> Feedback:
+        levels = get_args(Confidence)
+        count = len(self._assumptions[element_id].items)
+        if not (
+            isinstance(response, list)
+            and len(response) == count
+            and all(level in levels for level in response)
+        ):
+            msg = f"'{element_id}' takes {count} confidence(s) from {', '.join(levels)}"
+            raise ResponseError(msg)
+        with self._changed:
+            self._require_open()
+            self._append(
+                "answer",
+                {"question_id": element_id, "response": response, "confidence": None},
+            )
+        return Feedback(element_id, None)
+
+    def _answer(
+        self,
+        question_id: str,
+        response: Response,
+        confidence: Confidence | None,
+    ) -> Feedback:
         with self._changed:
             self._require_open()
             graded = grade(self._question(question_id), response, confidence)
@@ -264,19 +324,66 @@ class LessonRun:
                     "confidence": confidence,
                 },
             )
-        return Feedback(
-            question_id, graded if question_id in self._checkpoints else None
+        if question_id in self._finals:
+            return Feedback(question_id, None)
+        payload = next(
+            (
+                self.lesson.gated_payload(element)
+                for element in self._gated_elements
+                if element.gate == question_id
+            ),
+            None,
         )
+        reveal = dataclasses.replace(graded.reveal, element_payload=payload)
+        return Feedback(question_id, dataclasses.replace(graded, reveal=reveal))
 
-    def ask(self, section_id: str, selection: str, text: str) -> QuestionThread:
+    def run_tests(
+        self, question_id: str, confidence: Confidence | None = None
+    ) -> tuple[RunOutcome, Feedback]:
+        """Run `fix_the_bug` question `question_id`'s test command in its worktree.
+
+        The result is recorded as the reader's answer; the run's log tail is
+        also added to the returned grade's reveal.
+        """
+        with self._changed:
+            self._require_open()
+        question = self._question(question_id)
+        if not isinstance(question, FixTheBug):
+            msg = f"'{question_id}' is not a fix_the_bug question"
+            raise RunError(msg)
+        outcome = _run_in_worktree(question)
+        feedback = self._answer(question_id, {"passed": outcome.passed}, confidence)
+        if feedback.grade is None:
+            return outcome, feedback
+        reveal = dataclasses.replace(feedback.grade.reveal, log=outcome.log)
+        graded = dataclasses.replace(feedback.grade, reveal=reveal)
+        return outcome, Feedback(question_id, graded)
+
+    def gated(self, element: Element) -> bool:
+        """Whether `element` still withholds its payload, its gate unanswered.
+
+        A reader-first options element counts as gated until it is committed.
+        """
+        if isinstance(element, OptionsElement):
+            return element.reader_first and element.id not in self._commits
+        gate = element.gate if isinstance(element, GatedElement) else None
+        return gate is not None and gate not in self._grades
+
+    def ask(
+        self, section_id: str, selection: str, text: str, mode: str = "answer"
+    ) -> QuestionThread:
         """Record a reader question about `section_id` for the agent to answer.
 
-        `selection` is the text highlighted when asking, empty for the Ask box.
+        `selection` is the text highlighted when asking, empty for the Ask box;
+        `mode` is "answer", or "socratic" to be guided by questions instead.
         """
         with self._changed:
             self._require_open()
             if section_id not in self._sections:
                 msg = f"unknown section '{section_id}'"
+                raise RunError(msg)
+            if mode not in get_args(QuestionMode):
+                msg = f"mode must be one of {', '.join(get_args(QuestionMode))}"
                 raise RunError(msg)
             question_id = f"q{len(self._threads) + 1}"
             self._append(
@@ -286,9 +393,49 @@ class LessonRun:
                     "section_id": section_id,
                     "selection": selection,
                     "text": text,
+                    "mode": mode,
                 },
             )
             return self._threads[question_id]
+
+    def ask_line(self, element_id: str, line: int) -> LineAsk | None:
+        """Reveal the prepared ask on `line` of diff `element_id`, `None` if none.
+
+        A revealed ask is logged and kept as an answered reader question.
+        """
+        with self._changed:
+            self._require_open()
+            if element_id not in self._diffs:
+                msg = f"unknown diff element '{element_id}'"
+                raise RunError(msg)
+            ask = _line_ask(self._diffs[element_id][1], line)
+            if ask is not None:
+                self._append(
+                    "ask_line",
+                    {
+                        "question_id": f"q{len(self._threads) + 1}",
+                        "element_id": element_id,
+                        "line": line,
+                    },
+                )
+            return ask
+
+    def commit(self, element_id: str, text: str) -> dict[str, object]:
+        """Record the reader's own options and criteria for options `element_id`.
+
+        Returns the table the element withheld; a later commit replaces the text.
+        """
+        with self._changed:
+            self._require_open()
+            element = self._options.get(element_id)
+            if element is None:
+                msg = f"unknown options element '{element_id}'"
+                raise RunError(msg)
+            if not text.strip():
+                msg = "list your options before committing"
+                raise RunError(msg)
+            self._append("commit", {"element_id": element_id, "text": text})
+        return self.lesson.gated_payload(element)
 
     def reply(self, question_id: str, markdown: str) -> Reply:
         """Attach the agent's answer to reader question `question_id`."""
@@ -319,8 +466,9 @@ class LessonRun:
     def submit(self) -> Summary:
         """Close the final quiz, write `results.json` and `lesson.md`, notify the agent.
 
-        Raises `RunError` when a final question is unanswered or the run was
-        already submitted.
+        Missed questions go on the project's `Schedule`, and questions served
+        from it are recorded as reviews. Raises `RunError` when a final
+        question is unanswered or the run was already submitted.
         """
         with self._changed:
             self._require_open()
@@ -345,6 +493,7 @@ class LessonRun:
                     "summary": dataclasses.asdict(summary),
                 },
             )
+            Schedule.load(self.lesson_dir.parents[2]).record_submit(self)
             return summary
 
     def _results(
@@ -363,8 +512,29 @@ class LessonRun:
             "checkpoints": [
                 _graded_item(self._checkpoints[g.question_id], g) for g in checkpoints
             ],
+            "probe": [
+                _graded_item(question, self._grades[qid])
+                for qid, question in self._probes.items()
+                if qid in self._grades
+            ],
             "questions": [
                 dataclasses.asdict(thread) for thread in self._threads.values()
+            ],
+            "commits": [
+                {"element_id": element_id, "text": text}
+                for element_id, text in self._commits.items()
+            ],
+            "assumptions": [
+                {
+                    "element_id": element_id,
+                    "claim": item.claim,
+                    "confidence": confidence,
+                    "checked_by_spike": item.checked_by_spike,
+                }
+                for element_id, ratings in self._ratings.items()
+                for item, confidence in zip(
+                    self._assumptions[element_id].items, ratings, strict=True
+                )
             ],
         }
 
@@ -382,7 +552,11 @@ class LessonRun:
             raise RunError(msg)
 
     def _question(self, question_id: str) -> Question:
-        question = self._checkpoints.get(question_id) or self._finals.get(question_id)
+        question = (
+            self._checkpoints.get(question_id)
+            or self._finals.get(question_id)
+            or self._probes.get(question_id)
+        )
         if question is None:
             msg = f"unknown question '{question_id}'"
             raise RunError(msg)
@@ -399,6 +573,8 @@ class LessonRun:
     def _apply(self, event: Event) -> None:
         body = event.body
         match event.type:
+            case "answer" if body["question_id"] in self._assumptions:
+                self._ratings[body["question_id"]] = body["response"]
             case "answer":
                 self._grades[body["question_id"]] = grade(
                     self._question(body["question_id"]),
@@ -411,16 +587,71 @@ class LessonRun:
                     section_id=body["section_id"],
                     selection=body["selection"],
                     text=body["text"],
+                    mode=body.get("mode", "answer"),
                 )
             case "reply":
                 thread = self._threads[body["question_id"]]
                 self._threads[thread.id] = dataclasses.replace(
                     thread, reply=body["markdown"]
                 )
+            case "ask_line":
+                section_id, diff = self._diffs[body["element_id"]]
+                ask = next(a for a in diff.asks if a.line == body["line"])
+                self._threads[body["question_id"]] = QuestionThread(
+                    id=body["question_id"],
+                    section_id=section_id,
+                    selection=f"{diff.file}:{ask.line}",
+                    text=ask.question,
+                    reply=ask.answer,
+                )
+            case "commit":
+                self._commits[body["element_id"]] = body["text"]
             case "submitted":
                 self._summary = summarise(self._grades[qid] for qid in self._finals)
         self._log.append(event)
         self._changed.notify_all()
+
+
+def public_view_for(run: LessonRun) -> dict[str, object]:
+    """Return the lesson as the reader may see it now, holding back unearned reveals."""
+    view = run.lesson.public_view(run.gated)
+    sections = cast("list[dict[str, list[dict[str, object]]]]", view["sections"])
+    diffs = (e for s in sections for e in s["elements"] if e["type"] == "diff")
+    for element, element_id in zip(diffs, _diffs_by_id(run.lesson), strict=True):
+        element["id"] = element_id
+    return view
+
+
+@dataclass(frozen=True)
+class RunOutcome:
+    """Whether a `fix_the_bug` test run passed, and the tail of its output."""
+
+    passed: bool
+    log: str
+
+
+def _run_in_worktree(question: FixTheBug) -> RunOutcome:
+    try:
+        result = run_test_command(list(question.test_command), Path(question.worktree))
+    except MutationError as error:
+        raise RunError(str(error)) from error
+    output = ANSI_ESCAPE.sub("", result.stdout + result.stderr)
+    return RunOutcome(passed=result.returncode == 0, log=output[-LOG_TAIL_CHARS:])
+
+
+def _diffs_by_id(lesson: Lesson) -> dict[str, tuple[str, DiffElement]]:
+    """Key the lesson's diff elements `d1`, `d2`, ... in reading order."""
+    diffs = (
+        (section.id, element)
+        for section in lesson.sections
+        for element in section.elements
+        if isinstance(element, DiffElement)
+    )
+    return {f"d{n}": pair for n, pair in enumerate(diffs, 1)}
+
+
+def _line_ask(diff: DiffElement, line: int) -> LineAsk | None:
+    return next((ask for ask in diff.asks if ask.line == line), None)
 
 
 def _graded_item(question: Question, graded: Grade) -> dict[str, object]:
@@ -481,65 +712,78 @@ def _write_atomic(path: Path, text: str) -> None:
 
 
 def _dump_lesson(lesson: Lesson) -> dict[str, object]:
-    return {
-        "schema_version": lesson.schema_version,
-        "title": lesson.title,
-        "seed": lesson.seed,
-        "scope": dataclasses.asdict(lesson.scope),
-        "sections": [
-            {
-                "id": section.id,
-                "title": section.title,
-                "body": section.body,
-                "code": section.code and dataclasses.asdict(section.code),
-                "checkpoints": [_dump_question(q) for q in section.checkpoints],
-            }
-            for section in lesson.sections
-        ],
-        "final": [_dump_question(q) for q in lesson.final],
-    }
+    return cast("dict[str, object]", _dump(lesson))
 
 
-def _dump_question(question: Question) -> dict[str, object]:
-    return {"type": question.type_name, **dataclasses.asdict(question)}
+def _dump(value: object) -> object:
+    """Like `dataclasses.asdict`, adding `type` for classes that have a `type_name`."""
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        typed = {"type": value.type_name} if hasattr(value, "type_name") else {}
+        fields = dataclasses.fields(value)
+        return typed | {f.name: _dump(getattr(value, f.name)) for f in fields}
+    if isinstance(value, (list, tuple)):
+        return [_dump(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _dump(item) for key, item in value.items()}
+    return value
 
 
 def _load_lesson(raw: dict[str, Any]) -> Lesson:
-    return Lesson(
-        title=raw["title"],
-        scope=Scope(raw["scope"]["summary"], tuple(raw["scope"]["files"])),
-        sections=tuple(
-            Section(
-                id=section["id"],
-                title=section["title"],
-                body=section["body"],
-                code=_load_code(section["code"]),
-                checkpoints=tuple(_load_question(q) for q in section["checkpoints"]),
-            )
-            for section in raw["sections"]
-        ),
-        final=tuple(_load_question(q) for q in raw["final"]),
-        seed=raw["seed"],
-        schema_version=raw["schema_version"],
-    )
+    lesson: Lesson = _rebuild(Lesson, raw)
+    return lesson
 
 
-def _load_question(raw: dict[str, Any]) -> Question:
-    fields = {key: _load_field(key, value) for key, value in raw.items()}
-    return _QUESTION_TYPES[fields.pop("type")](**fields)
+def _rebuild(hint: Any, value: Any) -> Any:  # noqa: ANN401
+    """Turn `value`, parsed from a `_dump_lesson` snapshot, back into type `hint`.
 
-
-def _load_field(key: str, value: Any) -> Any:  # noqa: ANN401
-    if key == "code":
-        return _load_code(value)
-    if key == "options":
-        return tuple(Option(**option) for option in value)
-    if key == "blanks":
-        return tuple(
-            Blank(**{**blank, "accepted": tuple(blank["accepted"])}) for blank in value
+    A union of dataclasses picks its member by the snapshot's `type` key, or
+    else by the member whose field names are exactly the snapshot's keys.
+    """
+    origin = get_origin(hint)
+    if _is_dataclass_type(hint):
+        hints = _type_hints(hint)
+        return hint(
+            **{
+                field.name: _rebuild(hints[field.name], value[field.name])
+                for field in dataclasses.fields(hint)
+                if field.name in value
+            }
         )
-    return tuple(value) if isinstance(value, list) else value
+    if origin is tuple:
+        args = get_args(hint)
+        if args[-1] is Ellipsis:
+            return tuple(_rebuild(args[0], item) for item in value)
+        return tuple(_rebuild(arg, item) for arg, item in zip(args, value, strict=True))
+    if origin in {Union, UnionType} and value is not None:
+        members = [arg for arg in get_args(hint) if _is_dataclass_type(arg)]
+        if members:
+            member = next(
+                (
+                    arg
+                    for arg in members
+                    if (
+                        getattr(arg, "type_name", None) == value["type"]
+                        if "type" in value
+                        else value.keys() == _field_names(arg)
+                    )
+                ),
+                None,
+            )
+            if member is None:
+                msg = f"no member of {hint} matches the snapshot keys {sorted(value)}"
+                raise RunError(msg)
+            return _rebuild(member, value)
+    return value
 
 
-def _load_code(raw: dict[str, Any] | None) -> CodeBlock | None:
-    return CodeBlock(**raw) if raw else None
+@functools.cache
+def _type_hints(cls: type) -> dict[str, Any]:
+    return get_type_hints(cls)
+
+
+def _is_dataclass_type(hint: object) -> TypeGuard[type[DataclassInstance]]:
+    return isinstance(hint, type) and dataclasses.is_dataclass(hint)
+
+
+def _field_names(cls: type) -> set[str]:
+    return {field.name for field in dataclasses.fields(cls)}

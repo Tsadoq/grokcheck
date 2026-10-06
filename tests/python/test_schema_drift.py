@@ -19,7 +19,9 @@ LESSONS = sorted((FIXTURES / "lessons").glob("*.json"))
 
 # These fixtures break only rules a JSON Schema cannot state (unique ids, index
 # ranges, files on disk), so the schema must accept what the validator rejects.
-SEMANTIC_ONLY = frozenset({"invalid_many_errors.json"})
+SEMANTIC_ONLY = frozenset(
+    {"invalid_many_errors.json", "invalid_plan_media_not_used.json"}
+)
 
 
 def _schema_accepts(lesson: Path) -> bool:

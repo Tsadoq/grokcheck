@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "title": "How retry backs off",
   "scope": {
     "summary": "The `retry` helper that re-runs a flaky call with exponential backoff.",
@@ -22,7 +22,7 @@
           "options": [
             {"text": "Lets the `KeyError` propagate immediately.", "why": "Only `TransientError` is caught, so every other exception leaves the loop on the first attempt."},
             {"text": "Retries up to `attempts` times, then raises.", "why": "Misconception: retry catches every exception. The `except` clause names one class."},
-            {"text": "Returns `None`.", "why": "Misconception: a caught error is swallowed. Nothing here returns without a successful `call()`."}
+            {"text": "Returns `None` and hides the error.", "why": "Misconception: a caught error is swallowed. Nothing here returns without a successful `call()`."}
           ],
           "correct": 0,
           "explanation": "The `except TransientError` clause is the filter: a bug in `call` should fail fast rather than be retried."
@@ -43,7 +43,7 @@
     {
       "id": "control-flow",
       "title": "The loop and the backoff",
-      "body": "Each pass of the loop is one attempt. A successful `call()` returns straight out of the loop.\n\nA `TransientError` waits `base_delay * 2 ** attempt` seconds and tries again, so the waits double: 0.5, 1, 2, and so on. The last attempt does not wait; it re-raises the error for the caller.",
+      "body": "Each pass of the loop is one attempt. A successful `call()` returns straight out of the loop.\n\nA `TransientError` waits `base_delay * 2 ** attempt` seconds and tries again, so the waits double: 0.5, 1, 2, and so on. The last attempt does not wait. It re-raises the error for the caller.",
       "checkpoints": [
         {
           "id": "cp-raise-line",
@@ -99,8 +99,8 @@
       "prompt": "A teammate deletes the `if attempt == attempts - 1: raise` lines. What goes wrong when every attempt fails?",
       "options": [
         {"text": "`retry` sleeps once more and then returns `None`.", "why": "Without the re-raise the last `except` falls through to `sleep`, the loop ends, and the function returns `None` as if it succeeded."},
-        {"text": "The loop never ends.", "why": "Misconception: the `for` loop runs forever. `range(attempts)` still bounds it."},
-        {"text": "Nothing changes: Python re-raises the error at the end of the loop.", "why": "Misconception: a caught exception is re-raised automatically. Once caught, it is gone unless re-raised."}
+        {"text": "The loop keeps retrying past `attempts`.", "why": "Misconception: the `for` loop runs forever. `range(attempts)` still bounds it."},
+        {"text": "Python re-raises the error after the loop.", "why": "Misconception: a caught exception is re-raised automatically. Once caught, it is gone unless re-raised."}
       ],
       "correct": 0,
       "explanation": "The failure turns silent: the caller gets `None` and a wasted final sleep."

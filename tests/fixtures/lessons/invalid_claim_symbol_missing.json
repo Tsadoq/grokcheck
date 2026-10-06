@@ -1,0 +1,291 @@
+{
+  "schema_version": 2,
+  "title": "How LruCache evicts",
+  "seed": 7,
+  "plan": {
+    "subject": "area",
+    "time_budget": 15,
+    "content": [
+      "structure",
+      "behaviour"
+    ],
+    "media": [
+      "code",
+      "pick_line"
+    ],
+    "rejected": [
+      "trace"
+    ],
+    "rationale": [
+      "A small module read for its behaviour, so code with line questions beats a trace.",
+      "Fifteen minutes fits three short sections."
+    ],
+    "default_depth": "short"
+  },
+  "probe": [
+    {
+      "id": "probe-order",
+      "type": "single_choice",
+      "prompt": "Which end of an `OrderedDict` does `popitem(last=False)` remove from?",
+      "options": [
+        {
+          "text": "The front, the oldest insertion.",
+          "why": "`last=False` selects FIFO order."
+        },
+        {
+          "text": "The back, the newest insertion.",
+          "why": "That is the default `last=True`."
+        }
+      ],
+      "correct": 0
+    }
+  ],
+  "scope": {
+    "summary": "The least-recently-used cache in src/cache.py.",
+    "files": [
+      "src/cache.py"
+    ]
+  },
+  "sections": [
+    {
+      "id": "purpose",
+      "title": "What the cache is for",
+      "body": "`LruCache` keeps at most `capacity` items and forgets the one used **longest ago**.",
+      "code": {
+        "file": "src/cache.py",
+        "lines": [
+          4,
+          9
+        ]
+      },
+      "checkpoints": [
+        {
+          "id": "cp-capacity",
+          "type": "single_choice",
+          "prompt": "What happens when `LruCache(0)` is constructed?",
+          "options": [
+            {
+              "text": "It raises ValueError.",
+              "why": "The constructor rejects capacities below 1."
+            },
+            {
+              "text": "It builds a cache that stores nothing.",
+              "why": "A zero-capacity cache is refused, not accepted."
+            },
+            {
+              "text": "It builds a cache of unlimited size.",
+              "why": "Nothing in the code treats 0 as unlimited."
+            }
+          ],
+          "correct": 0,
+          "explanation": "The guard in `__init__` raises before any state exists."
+        },
+        {
+          "id": "cp-methods",
+          "type": "multiple_choice",
+          "prompt": "Which methods mark a key as recently used?",
+          "options": [
+            {
+              "text": "get",
+              "why": "A hit moves the key to the end."
+            },
+            {
+              "text": "put",
+              "why": "Every write moves the key to the end."
+            },
+            {
+              "text": "__len__",
+              "why": "Counting items does not touch their order."
+            }
+          ],
+          "correct": [
+            0,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "id": "eviction",
+      "title": "How eviction works",
+      "body": "After each `put`, the cache drops the **first** item of its ordered dict when it is over capacity.",
+      "code": {
+        "language": "python",
+        "text": "self._items.popitem(last=False)"
+      },
+      "checkpoints": [
+        {
+          "id": "cp-evict-line",
+          "type": "pick_line",
+          "prompt": "Which line removes the least recently used item?",
+          "code": {
+            "file": "src/cache.py",
+            "lines": [
+              17,
+              21
+            ]
+          },
+          "answer_lines": [
+            5
+          ],
+          "explanation": "`popitem(last=False)` pops from the front, where the oldest key sits."
+        }
+      ]
+    },
+    {
+      "id": "reads",
+      "title": "Reads count as use",
+      "body": "A hit in `get` moves the key to the end, the same as a write.",
+      "elements": [
+        {
+          "type": "code",
+          "code": {
+            "file": "src/cache.py",
+            "lines": [
+              11,
+              15
+            ]
+          },
+          "caption": "A miss returns before touching the order.",
+          "claims": [
+            {
+              "text": "The miss path evicts.",
+              "backing": {
+                "file": "src/cache.py",
+                "lines": [
+                  11,
+                  13
+                ],
+                "symbol": "popitem"
+              }
+            },
+            {
+              "text": "A read never moves the key.",
+              "backing": {
+                "reason": "assumed"
+              },
+              "verified": "contradicted"
+            }
+          ]
+        },
+        {
+          "type": "prose",
+          "markdown": "`move_to_end` is O(1) on an `OrderedDict`, so a read costs no more than a plain dict lookup plus one relink.",
+          "depth": "detail",
+          "claims": [
+            {
+              "text": "`move_to_end` runs in constant time.",
+              "backing": {
+                "url": "https://docs.python.org/3/library/collections.html#collections.OrderedDict.move_to_end",
+                "version": "3.12"
+              }
+            },
+            {
+              "text": "A read costs one dict lookup plus one relink.",
+              "backing": {
+                "spike_id": "read-cost"
+              }
+            },
+            {
+              "text": "Eviction never blocks a concurrent reader.",
+              "backing": {
+                "reason": "threading is out of scope"
+              }
+            }
+          ]
+        }
+      ],
+      "checkpoints": [
+        {
+          "id": "cp-miss-order",
+          "type": "single_choice",
+          "prompt": "Does a `get` miss change which key is evicted next?",
+          "options": [
+            {
+              "text": "No.",
+              "why": "The miss returns before `move_to_end` runs."
+            },
+            {
+              "text": "Yes.",
+              "why": "Assumes every lookup counts as a use, hit or miss."
+            }
+          ],
+          "correct": 0
+        }
+      ]
+    }
+  ],
+  "final": [
+    {
+      "id": "final-predict",
+      "type": "predict_output",
+      "prompt": "What does this print?",
+      "code": {
+        "language": "python",
+        "text": "cache = LruCache(1)\ncache.put(\"a\", 1)\ncache.put(\"b\", 2)\nprint(cache.get(\"a\"))"
+      },
+      "accepted": [
+        "None"
+      ],
+      "explanation": "Capacity 1 means `a` is evicted when `b` arrives."
+    },
+    {
+      "id": "final-predict-choice",
+      "type": "predict_output",
+      "prompt": "What does this print?",
+      "code": {
+        "language": "python",
+        "text": "cache = LruCache(2)\ncache.put(\"a\", 1)\nprint(len(cache))"
+      },
+      "options": [
+        {
+          "text": "1",
+          "why": "One item was stored."
+        },
+        {
+          "text": "2",
+          "why": "Capacity is not the item count."
+        }
+      ],
+      "correct": 0
+    },
+    {
+      "id": "final-order",
+      "type": "order_steps",
+      "prompt": "Put the steps of `put` in order.",
+      "steps": [
+        "Store the value under the key",
+        "Move the key to the end",
+        "Evict the oldest item if over capacity"
+      ]
+    },
+    {
+      "id": "final-blank",
+      "type": "fill_blank",
+      "prompt": "Complete the eviction call.",
+      "language": "python",
+      "text": "self._items.popitem([[blank:arg]])",
+      "blanks": [
+        {
+          "id": "arg",
+          "accepted": [
+            "last=False"
+          ],
+          "case_sensitive": true,
+          "quote_insensitive": false
+        }
+      ]
+    },
+    {
+      "id": "final-why",
+      "type": "open_answer",
+      "prompt": "Why does `get` move the key to the end even though it only reads?",
+      "model_answer": "Reading counts as use; moving the key keeps recently read items away from the eviction end.",
+      "rubric": [
+        "Says a read counts as a use",
+        "Links the end of the dict to the most recently used position",
+        "Links the front of the dict to eviction"
+      ]
+    }
+  ]
+}

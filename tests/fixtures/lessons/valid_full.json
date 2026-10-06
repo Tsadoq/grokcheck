@@ -1,7 +1,32 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "title": "How LruCache evicts",
+  "intro": "A cache of 2 items just dropped the key you read a second ago. That read should have kept it. We go through what the cache is for, how eviction works and why reads count as use. Watch which key moves on every read.",
   "seed": 7,
+  "plan": {
+    "subject": "area",
+    "time_budget": 15,
+    "content": ["structure", "behaviour"],
+    "media": ["code", "pick_line"],
+    "rejected": ["trace"],
+    "rationale": [
+      "A small module read for its behaviour, so code with line questions beats a trace.",
+      "Fifteen minutes fits three short sections."
+    ],
+    "default_depth": "short"
+  },
+  "probe": [
+    {
+      "id": "probe-order",
+      "type": "single_choice",
+      "prompt": "Which end of an `OrderedDict` does `popitem(last=False)` remove from?",
+      "options": [
+        {"text": "The front, the oldest insertion.", "why": "`last=False` selects FIFO order."},
+        {"text": "The back, the newest insertion.", "why": "That is the default `last=True`."}
+      ],
+      "correct": 0
+    }
+  ],
   "scope": {
     "summary": "The least-recently-used cache in src/cache.py.",
     "files": ["src/cache.py"]
@@ -43,6 +68,45 @@
       "title": "How eviction works",
       "body": "After each `put`, the cache drops the **first** item of its ordered dict when it is over capacity.",
       "code": {"language": "python", "text": "self._items.popitem(last=False)"},
+      "elements": [
+        {
+          "type": "prose",
+          "markdown": "Eviction runs only when the cache is over capacity.",
+          "claims": [
+            {"text": "`put` evicts only past capacity.", "backing": {"file": "src/cache.py", "lines": [20, 21], "symbol": "popitem", "quote": "self._items.popitem(last=False)"}}
+          ]
+        },
+        {
+          "type": "diff",
+          "file": "src/cache.py",
+          "old_start": 17,
+          "new_start": 17,
+          "lines": [
+            {"op": " ", "text": "    def put(self, key: str, value: object) -> None:"},
+            {"op": " ", "text": "        self._items[key] = value"},
+            {"op": " ", "text": "        self._items.move_to_end(key)"},
+            {"op": "+", "text": "        if len(self._items) > self._capacity:"},
+            {"op": "+", "text": "            self._items.popitem(last=False)"}
+          ],
+          "notes": [
+            {
+              "lines": [20, 21],
+              "cite": {"file": "src/cache.py", "lines": [20, 21], "symbol": "popitem"},
+              "text": "The change adds eviction after every write."
+            }
+          ],
+          "asks": [
+            {"line": 21, "question": "Why `last=False`?", "answer": "It pops the oldest key, at the front."}
+          ]
+        },
+        {
+          "type": "diagram",
+          "kind": "flowchart",
+          "mermaid": "flowchart TD\n  put[put key, value] -->|stores| items[(ordered dict)]\n  put -->|then checks| over{over capacity?}\n  over -->|no| done([return])\n  over -->|yes| pop[popitem last=False]\n  pop -->|drops| oldest[oldest key]\n  get[get key] -->|reads| items\n  get -->|calls| move[move_to_end]\n  move -->|refreshes| items",
+          "caption": "A write may evict; a read only refreshes recency.",
+          "legend": "Diamonds are decisions; the cylinder is the ordered dict."
+        }
+      ],
       "checkpoints": [
         {
           "id": "cp-evict-line",
@@ -51,6 +115,177 @@
           "code": {"file": "src/cache.py", "lines": [17, 21]},
           "answer_lines": [5],
           "explanation": "`popitem(last=False)` pops from the front, where the oldest key sits."
+        },
+        {
+          "id": "cp-mutant",
+          "type": "mutation_quiz",
+          "prompt": "With the eviction line deleted, which tests fail?",
+          "mutation": {"file": "src/cache.py", "line": 21, "replacement": null},
+          "tests": [
+            {"name": "tests/test_cache.py::test_evicts_oldest", "fails": true},
+            {"name": "tests/test_cache.py::test_get_miss", "fails": false}
+          ],
+          "log": "FAILED tests/test_cache.py::test_evicts_oldest - assert 2 == 1",
+          "explanation": "Only the eviction test looks at what is left after the cache fills."
+        }
+      ]
+    },
+    {
+      "id": "reads",
+      "title": "Reads count as use",
+      "body": "A hit in `get` moves the key to the end, the same as a write.",
+      "elements": [
+        {
+          "type": "code",
+          "code": {"file": "src/cache.py", "lines": [11, 15]},
+          "caption": "A miss returns before touching the order.",
+          "claims": [
+            {
+              "text": "A miss returns before the key is moved.",
+              "backing": {"file": "src/cache.py", "lines": [12, 14], "symbol": "move_to_end"},
+              "verified": "supported"
+            }
+          ]
+        },
+        {
+          "type": "prose",
+          "markdown": "`move_to_end` is O(1) on an `OrderedDict`, so a read costs no more than a plain dict lookup plus one relink.",
+          "depth": "detail",
+          "claims": [
+            {
+              "text": "`move_to_end` runs in constant time.",
+              "backing": {"url": "https://docs.python.org/3/library/collections.html#collections.OrderedDict.move_to_end", "version": "3.12"}
+            },
+            {"text": "A read costs one dict lookup plus one relink.", "backing": {"spike_id": "read-cost"}},
+            {"text": "Eviction never blocks a concurrent reader.", "backing": {"reason": "threading is out of scope"}}
+          ]
+        },
+        {
+          "type": "vocab",
+          "code": {"file": "src/cache.py", "lines": [11, 15]},
+          "min_opened": 2,
+          "owners": {"ours": "good", "stdlib": "muted"},
+          "terms": [
+            {"term": "key", "owner": "ours", "definition": "The name a value is stored under.", "lines": [1, 2, 4, 5], "detail": "A plain `str`; the cache never hashes it itself.", "library_term": null},
+            {"term": "move_to_end", "owner": "stdlib", "definition": "Relinks a key as the newest.", "lines": [4], "library_term": "touch", "false_friend": true},
+            {"term": "_items", "owner": "ours", "definition": "The ordered dict holding every entry.", "lines": [2, 4, 5], "library_term": "store"}
+          ]
+        }
+      ],
+      "checkpoints": [
+        {
+          "id": "cp-miss-order",
+          "type": "single_choice",
+          "prompt": "Does a `get` miss change which key is evicted next?",
+          "options": [
+            {"text": "No.", "why": "The miss returns before `move_to_end` runs."},
+            {"text": "Yes.", "why": "Assumes every lookup counts as a use, hit or miss."}
+          ],
+          "correct": 0
+        },
+        {
+          "id": "cp-fix",
+          "type": "fix_the_bug",
+          "prompt": "A planted bug makes `get` forget recency. Fix it until the tests pass.",
+          "mutation": {"file": "src/cache.py", "line": 14, "replacement": "        self._items.move_to_end(key)"},
+          "worktree": "/tmp",
+          "test_command": ["python", "-m", "pytest", "-q"]
+        }
+      ]
+    },
+    {
+      "id": "change",
+      "title": "Changing get",
+      "body": "A change to `get` reaches every reader that relies on recency.",
+      "elements": [
+        {
+          "type": "options",
+          "id": "opt-cache",
+          "question": "How should reads keep recency?",
+          "criteria": ["read cost", "code to maintain"],
+          "options": [
+            {"name": "Leave reads alone", "costs": "Eviction ignores reads.", "assumes": "Writes alone track use.", "standing": "do_nothing"},
+            {
+              "name": "functools.lru_cache",
+              "costs": "No per-key eviction hook.",
+              "assumes": "Callers only need memoisation.",
+              "standing": "existing_dependency",
+              "constraints": [{"text": "Keys must be hashable.", "hard": true}]
+            },
+            {
+              "name": "move_to_end on get",
+              "costs": "One relink per hit.",
+              "assumes": "Hits dominate misses.",
+              "standing": "build",
+              "sketch": {"language": "python", "text": "self.items.move_to_end(key)"},
+              "constraints": [{"text": "Stay under 50 lines.", "hard": false, "waivable_by": "the maintainer"}]
+            }
+          ]
+        },
+        {
+          "type": "assumptions",
+          "id": "assume-cache",
+          "items": [
+            {"claim": "A hit costs one lookup and one relink.", "backing": {"spike_id": "read-cost"}, "checked_by_spike": "read-cost"},
+            {"claim": "Hits dominate misses.", "backing": {"reason": "No traffic data yet."}}
+          ]
+        },
+        {
+          "type": "playground",
+          "inputs": [
+            {"id": "capacity", "label": "Capacity", "min": 1, "max": 2},
+            {"id": "reads", "label": "Reads of `a` before `c` is added", "min": 0, "max": 1, "value": 1}
+          ],
+          "presets": [{"label": "Tight cache, no read", "values": {"capacity": 1, "reads": 0}}],
+          "variants": ["evicted"],
+          "ticks": 3,
+          "rows": [
+            {"id": "ops", "label": "operation"},
+            {"id": "evicted", "label": "keys left"}
+          ],
+          "legend": [
+            {"cell": "put", "label": "put", "colour": "accent"},
+            {"cell": "get", "label": "get", "colour": "good"},
+            {"cell": "kept", "label": "key kept", "colour": "good"},
+            {"cell": "gone", "label": "key evicted", "colour": "bad"}
+          ],
+          "states": {
+            "1,0": {"cells": {"ops": ["put", "put", "put"], "evicted": ["kept", "gone", "gone"]}, "outcomes": {"evicted": {"outcome": "lost", "lost": 2}}, "explain": "Capacity 1 keeps only `c`."},
+            "1,1": {"cells": {"ops": ["put", "get", "put"], "evicted": ["kept", "kept", "gone"]}, "outcomes": {"evicted": {"outcome": "lost", "lost": 2}}, "explain": "The read cannot save `a` when only one key fits."},
+            "2,0": {"cells": {"ops": ["put", "put", "put"], "evicted": ["kept", "kept", "gone"]}, "outcomes": {"evicted": {"outcome": "lost", "lost": 1}}, "explain": "`a` is oldest, so `c` evicts it."},
+            "2,1": {"cells": {"ops": ["put", "get", "put"], "evicted": ["kept", "kept", "gone"]}, "outcomes": {"evicted": {"outcome": "lost", "lost": 1}}, "explain": "Reading `a` makes `b` oldest, so `c` evicts `b`."}
+          },
+          "tasks": [
+            {"text": "Find a capacity that loses two keys.", "when": [{"variant": "evicted", "outcome": "lost", "min_lost": 2}]}
+          ]
+        }
+      ],
+      "checkpoints": [
+        {
+          "id": "cp-impact",
+          "type": "change_impact",
+          "prompt": "Which of these break if `get` stops moving the key to the end?",
+          "change": "`get` returns the value without calling `move_to_end`.",
+          "candidates": [
+            {"text": "A read keeps a key from eviction", "why": "That relies on `get` refreshing recency."},
+            {"text": "`put` evicts when over capacity", "why": "Eviction itself does not depend on `get`."},
+            {"text": "Reading `a` then adding `c` evicts `b`", "why": "Without the move, `a` stays oldest and is evicted."}
+          ],
+          "affected": [0, 2]
+        },
+        {
+          "id": "cp-parsons",
+          "type": "parsons",
+          "prompt": "Assemble `get` from these lines.",
+          "lines": [
+            {"text": "if key not in self._items:", "indent": 0},
+            {"text": "return None", "indent": 1},
+            {"text": "self._items.move_to_end(key)", "indent": 0},
+            {"text": "return self._items[key]", "indent": 0}
+          ],
+          "distractors": [
+            {"text": "self._items.popitem(last=False)", "why": "Reading never evicts."}
+          ]
         }
       ]
     }

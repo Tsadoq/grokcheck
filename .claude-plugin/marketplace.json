@@ -6,7 +6,7 @@
     {
       "name": "grokcheck",
       "source": "./",
-      "description": "Interactive code lessons with a live quiz."
+      "description": "Turns a change, an area of code, a library, a choice or a document into an interactive browser lesson with checked claims, gated checkpoints, a live quiz and spaced re-tests, plus an optional skill for decks and videos."
     }
   ]
 }

@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "title": "A lesson with four defects",
   "scope": {
     "summary": "The least-recently-used cache in src/cache.py.",

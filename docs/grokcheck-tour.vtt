@@ -1,0 +1,82 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:05.952
+Your agent just wrote a change, the diff looked fine, and you approved it without being able to explain it.
+
+00:00:06.402 --> 00:00:10.967
+That is risky, because people are confident about code they do not understand.
+
+00:00:11.417 --> 00:00:17.156
+You want to know whether you really understand it, so the lesson tests you instead of asking how sure you feel.
+
+00:00:17.606 --> 00:00:22.961
+Two parts make that work: a gate that stops skimming, and evidence behind every claim.
+
+00:00:23.411 --> 00:00:29.320
+Every section ends in checkpoint questions, and the next section stays locked until you answer them.
+
+00:00:29.770 --> 00:00:35.679
+A spike, a small experiment against your pinned versions, keeps its result hidden until you predict it.
+
+00:00:36.129 --> 00:00:44.065
+Each claim carries its evidence, the cited lines or a spike's output, and a separate agent judges it from that evidence alone.
+
+00:00:44.515 --> 00:00:49.785
+For a document, the author writes only from the ingested copies, never from memory.
+
+00:00:50.235 --> 00:00:55.056
+Next time an agent hands you a change, answer the checkpoints before you approve it.
+
+00:00:55.506 --> 00:01:02.738
+You type a question into the lesson page, but the agent never sees the page, so something has to carry that question to it.
+
+00:01:03.188 --> 00:01:07.113
+Let's follow that one question from the page to the agent and back.
+
+00:01:07.563 --> 00:01:16.267
+First the setup: the agent plans the lesson, a fresh subagent checks its claims, and the grokcheck command serves it and hands events back.
+
+00:01:16.717 --> 00:01:19.683
+Serve returns at once, while the server keeps running.
+
+00:01:20.133 --> 00:01:28.730
+Now the agent runs wait in the background, and wait exits with exactly one event, such as your question, and that exit wakes the agent.
+
+00:01:29.180 --> 00:01:34.215
+The agent answers with reply, and the answer appears under your question in the page.
+
+00:01:34.665 --> 00:01:40.873
+When you submit the final quiz, the submitted event carries your results, and the agent starts the debrief.
+
+00:01:41.323 --> 00:01:45.056
+So next time the agent seems silent, check that a wait is running.
+
+00:01:45.506 --> 00:01:51.671
+Picture a lesson that says a retry loop backs off when the code never does; you would learn it wrong and feel sure.
+
+00:01:52.121 --> 00:01:53.999
+So you want to know where the checks stop.
+
+00:01:54.449 --> 00:01:59.313
+Three limits: what the checker reads, what the research proves, and what video can do.
+
+00:01:59.763 --> 00:02:05.821
+The grounding subagent judges each claim only from the lines it cites, and reads no other file.
+
+00:02:06.271 --> 00:02:11.434
+If those lines show neither truth nor falsehood, the verdict is not shown, not wrong.
+
+00:02:11.884 --> 00:02:16.172
+A contradicted claim is rewritten to match the evidence, never deleted.
+
+00:02:16.622 --> 00:02:24.494
+Only research claims marked verified were checked against the primary source; the rest need checking before they drive a decision.
+
+00:02:24.944 --> 00:02:29.659
+The verified findings favour retrieval with feedback, and execution traces.
+
+00:02:30.109 --> 00:02:35.954
+And video, this one included, is passive: it gives the feeling of understanding without testing it.
+
+00:02:36.404 --> 00:02:42.911
+So do not stop at watching: take the quiz, and treat every not shown verdict as a gap to check yourself.
