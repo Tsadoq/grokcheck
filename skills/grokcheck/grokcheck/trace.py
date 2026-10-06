@@ -17,7 +17,7 @@ import runpy
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from collections.abc import Coroutine
@@ -257,7 +257,7 @@ class _RecordingPolicy(asyncio.DefaultEventLoopPolicy):
 
     def new_event_loop(self) -> asyncio.AbstractEventLoop:
         loop = super().new_event_loop()
-        loop.set_task_factory(self._recorder.task_factory)
+        loop.set_task_factory(cast("Any", self._recorder.task_factory))
         return loop
 
 
