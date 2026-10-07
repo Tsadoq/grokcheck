@@ -20,7 +20,8 @@
       "vocab",
       "diagram",
       "single_choice",
-      "multiple_choice"
+      "multiple_choice",
+      "assumptions"
     ],
     "rejected": [
       "trace",
@@ -31,6 +32,7 @@
       "The subject is three documents, so every claim quotes their ingested copies.",
       "A vocabulary table names the six terms the rest of the tour uses.",
       "One diagram shows how the agent, the server and the page pass events.",
+      "The research findings the design rests on are listed as assumptions, so you rate how sure you are of each before the quiz.",
       "Traces and spikes need code to run, and a video would only repeat the diagram."
     ],
     "default_depth": "detail"
@@ -93,43 +95,47 @@
                 ],
                 "quote": "Every section ends in checkpoint questions, and the next section stays locked until you answer them."
               },
-              "verified": "supported"
+              "verified": "supported",
+              "verified_hash": "2e0f69956b4944f0"
             },
             {
               "text": "A spike's result is hidden until the reader predicts it.",
               "backing": {
                 "file": ".grokcheck/sources/readme.md",
                 "lines": [
-                  69,
-                  69
+                  70,
+                  70
                 ],
                 "quote": "A small experiment against your pinned versions, its result hidden until you predict it"
               },
-              "verified": "supported"
+              "verified": "supported",
+              "verified_hash": "385d6c10161f0552"
             },
             {
-              "text": "The evidence for a claim is the cited lines or a spike's output.",
+              "text": "The evidence for a claim is the cited lines, a spike's output, or recorded rows.",
               "backing": {
                 "file": ".grokcheck/sources/skill.md",
                 "lines": [
-                  79,
-                  79
+                  105,
+                  105
                 ],
-                "quote": "the `evidence` (the cited lines, or a spike's output)"
+                "quote": "the `evidence` (the cited lines, a spike's output, or recorded rows with where they came from)"
               },
-              "verified": "supported"
+              "verified": "supported",
+              "verified_hash": "0c87a2170a2d50f4"
             },
             {
               "text": "The author writes a document lesson from the ingested copies, not from memory.",
               "backing": {
                 "file": ".grokcheck/sources/skill.md",
                 "lines": [
-                  45,
-                  45
+                  68,
+                  68
                 ],
                 "quote": "Author only from the copies, never from memory of the document."
               },
-              "verified": "supported"
+              "verified": "supported",
+              "verified_hash": "500e030f2b57f030"
             },
             {
               "text": "Understanding has to be tested, because people are confident about code they do not understand.",
@@ -141,7 +147,8 @@
                 ],
                 "quote": "Understanding has to be tested, never self-reported."
               },
-              "verified": "supported"
+              "verified": "supported",
+              "verified_hash": "ef7738e14f96cd07"
             }
           ]
         }
@@ -220,55 +227,60 @@
                 ],
                 "quote": "a fresh-context subagent checks its claims, and the `grokcheck` CLI serves it, collects answers, and hands events back to you."
               },
-              "verified": "supported"
+              "verified": "supported",
+              "verified_hash": "2f9a47fe5dbc9a48"
             },
             {
               "text": "`serve` returns while the server keeps running.",
               "backing": {
                 "file": ".grokcheck/sources/skill.md",
                 "lines": [
-                  89,
-                  95
+                  117,
+                  123
                 ],
                 "quote": "returns while the server keeps running"
               },
-              "verified": "supported"
+              "verified": "supported",
+              "verified_hash": "f1339abec1096bf2"
             },
             {
               "text": "`wait` exits with one event, and its exit wakes the agent.",
               "backing": {
                 "file": ".grokcheck/sources/skill.md",
                 "lines": [
-                  105,
-                  105
+                  133,
+                  133
                 ],
                 "quote": "It exits with one JSON event, and its exit wakes you."
               },
-              "verified": "supported"
+              "verified": "supported",
+              "verified_hash": "0f3983f532b22d35"
             },
             {
               "text": "A reply sent with `reply` appears under the reader's question in the page.",
               "backing": {
                 "file": ".grokcheck/sources/skill.md",
                 "lines": [
-                  118,
-                  124
+                  146,
+                  152
                 ],
                 "quote": "The reply appears under the reader's question in the page."
               },
-              "verified": "supported"
+              "verified": "supported",
+              "verified_hash": "4d5eb51431270708"
             },
             {
               "text": "The debrief starts from the `submitted` event.",
               "backing": {
                 "file": ".grokcheck/sources/skill.md",
                 "lines": [
-                  126,
-                  128
+                  154,
+                  156
                 ],
                 "quote": "The `submitted` event carries `results_path` and a `summary`."
               },
-              "verified": "supported"
+              "verified": "supported",
+              "verified_hash": "f86ec9384c16d807"
             }
           ]
         }
@@ -332,36 +344,39 @@
               "backing": {
                 "file": ".grokcheck/sources/skill.md",
                 "lines": [
-                  79,
-                  79
+                  105,
+                  105
                 ],
                 "quote": "judge only from its `evidence`"
               },
-              "verified": "supported"
+              "verified": "supported",
+              "verified_hash": "576cce59beb0018e"
             },
             {
               "text": "A claim whose evidence shows neither truth nor falsehood gets the verdict `not_shown`.",
               "backing": {
                 "file": ".grokcheck/sources/skill.md",
                 "lines": [
-                  79,
-                  79
+                  105,
+                  105
                 ],
                 "quote": "`not_shown` when it shows neither or the evidence is `null`"
               },
-              "verified": "supported"
+              "verified": "supported",
+              "verified_hash": "fe5569e0480f7498"
             },
             {
               "text": "A `contradicted` claim is rewritten to say what the evidence shows, and is never deleted to pass the check.",
               "backing": {
                 "file": ".grokcheck/sources/skill.md",
                 "lines": [
-                  87,
-                  87
+                  113,
+                  113
                 ],
                 "quote": "Rewrite every `contradicted` claim so it says what the evidence shows"
               },
-              "verified": "supported"
+              "verified": "supported",
+              "verified_hash": "c94d0076a633d02a"
             },
             {
               "text": "Only claims marked \"(verified)\" in the research notes were checked against the primary source. The rest need checking before they drive a decision.",
@@ -373,7 +388,8 @@
                 ],
                 "quote": "the rest need checking before they drive a decision."
               },
-              "verified": "supported"
+              "verified": "supported",
+              "verified_hash": "6fbf2bd248504b12"
             },
             {
               "text": "The research calls video passive: it gives the feeling of understanding without testing it.",
@@ -385,7 +401,8 @@
                 ],
                 "quote": "it is passive and gives the feeling of understanding without testing it."
               },
-              "verified": "supported"
+              "verified": "supported",
+              "verified_hash": "06467a4ea133ab75"
             },
             {
               "text": "Retrieval with feedback is the strongest lever the research found, and the finding is marked verified.",
@@ -397,7 +414,8 @@
                 ],
                 "quote": "Retrieval with feedback is the strongest lever found (g = 0.499 across 222 classroom studies, verified)."
               },
-              "verified": "supported"
+              "verified": "supported",
+              "verified_hash": "374f46a1087052d3"
             },
             {
               "text": "Execution traces are the only comprehension aid with a controlled positive result, and the finding is marked verified.",
@@ -409,7 +427,53 @@
                 ],
                 "quote": "Execution traces are the only comprehension aid with a controlled positive result (Cornelissen 2009: 21% less time, 43% more correct, verified)."
               },
-              "verified": "supported"
+              "verified": "supported",
+              "verified_hash": "2c234cf2303b4e52"
+            }
+          ]
+        },
+        {
+          "type": "assumptions",
+          "id": "s3-assumptions",
+          "items": [
+            {
+              "claim": "The research calls video passive: it gives the feeling of understanding without testing it.",
+              "backing": {
+                "file": ".grokcheck/sources/readme-2.md",
+                "lines": [
+                  83,
+                  83
+                ],
+                "quote": "it is passive and gives the feeling of understanding without testing it."
+              },
+              "verified": "supported",
+              "verified_hash": "06467a4ea133ab75"
+            },
+            {
+              "claim": "Retrieval with feedback is the strongest lever the research found, and the finding is marked verified.",
+              "backing": {
+                "file": ".grokcheck/sources/readme-2.md",
+                "lines": [
+                  29,
+                  29
+                ],
+                "quote": "Retrieval with feedback is the strongest lever found (g = 0.499 across 222 classroom studies, verified)."
+              },
+              "verified": "supported",
+              "verified_hash": "374f46a1087052d3"
+            },
+            {
+              "claim": "Execution traces are the only comprehension aid with a controlled positive result, and the finding is marked verified.",
+              "backing": {
+                "file": ".grokcheck/sources/readme-2.md",
+                "lines": [
+                  31,
+                  31
+                ],
+                "quote": "Execution traces are the only comprehension aid with a controlled positive result (Cornelissen 2009: 21% less time, 43% more correct, verified)."
+              },
+              "verified": "supported",
+              "verified_hash": "2c234cf2303b4e52"
             }
           ]
         }

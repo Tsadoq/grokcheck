@@ -1,0 +1,3693 @@
+{
+ "format": 1,
+ "id": "reconnect-wrong",
+ "fields": {
+  "version": "str",
+  "drop": "int",
+  "lid": "int",
+  "running": "int",
+  "lane": "str",
+  "seq": "int",
+  "event": "str",
+  "kind": "str",
+  "text": "str"
+ },
+ "rows": [
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 2,
+   "running": 0,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 2,
+   "running": 0,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 2,
+   "running": 0,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 2,
+   "running": 0,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 2,
+   "running": 0,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 2,
+   "running": 0,
+   "lane": "client",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 2,
+   "running": 0,
+   "lane": "client",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 2,
+   "running": 0,
+   "lane": "server",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 2,
+   "running": 0,
+   "lane": "server",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 2,
+   "running": 0,
+   "lane": "server",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 2,
+   "running": 0,
+   "lane": "server",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 2,
+   "running": 0,
+   "lane": "server",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 2,
+   "running": 1,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 2,
+   "running": 1,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 2,
+   "running": 1,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 2,
+   "running": 1,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 2,
+   "running": 1,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 2,
+   "running": 1,
+   "lane": "client",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 2,
+   "running": 1,
+   "lane": "client",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 2,
+   "running": 1,
+   "lane": "server",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 2,
+   "running": 1,
+   "lane": "server",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 2,
+   "running": 1,
+   "lane": "server",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 2,
+   "running": 1,
+   "lane": "server",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 2,
+   "running": 1,
+   "lane": "server",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 3,
+   "running": 0,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 3,
+   "running": 0,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 3,
+   "running": 0,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 3,
+   "running": 0,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 3,
+   "running": 0,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 3,
+   "running": 0,
+   "lane": "client",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 3,
+   "running": 0,
+   "lane": "client",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 3,
+   "running": 0,
+   "lane": "server",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 3,
+   "running": 0,
+   "lane": "server",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 3,
+   "running": 0,
+   "lane": "server",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 3,
+   "running": 0,
+   "lane": "server",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 3,
+   "running": 0,
+   "lane": "server",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 3,
+   "running": 1,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 3,
+   "running": 1,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 3,
+   "running": 1,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 3,
+   "running": 1,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 3,
+   "running": 1,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 3,
+   "running": 1,
+   "lane": "client",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 3,
+   "running": 1,
+   "lane": "client",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 3,
+   "running": 1,
+   "lane": "server",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 3,
+   "running": 1,
+   "lane": "server",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 3,
+   "running": 1,
+   "lane": "server",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 3,
+   "running": 1,
+   "lane": "server",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 3,
+   "running": 1,
+   "lane": "server",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 4,
+   "running": 0,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 4,
+   "running": 0,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 4,
+   "running": 0,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 4,
+   "running": 0,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 4,
+   "running": 0,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 4,
+   "running": 0,
+   "lane": "client",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 4,
+   "running": 0,
+   "lane": "client",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 4,
+   "running": 0,
+   "lane": "server",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 4,
+   "running": 0,
+   "lane": "server",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 4,
+   "running": 0,
+   "lane": "server",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 4,
+   "running": 0,
+   "lane": "server",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 4,
+   "running": 0,
+   "lane": "server",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 4,
+   "running": 1,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 4,
+   "running": 1,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 4,
+   "running": 1,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 4,
+   "running": 1,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 4,
+   "running": 1,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 4,
+   "running": 1,
+   "lane": "client",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 4,
+   "running": 1,
+   "lane": "client",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 4,
+   "running": 1,
+   "lane": "server",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 4,
+   "running": 1,
+   "lane": "server",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 4,
+   "running": 1,
+   "lane": "server",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 4,
+   "running": 1,
+   "lane": "server",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "old",
+   "drop": 2,
+   "lid": 4,
+   "running": 1,
+   "lane": "server",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 2,
+   "running": 0,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 2,
+   "running": 0,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 2,
+   "running": 0,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 2,
+   "running": 0,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 2,
+   "running": 0,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 2,
+   "running": 0,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 2,
+   "running": 0,
+   "lane": "client",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 2,
+   "running": 0,
+   "lane": "client",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 2,
+   "running": 0,
+   "lane": "server",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 2,
+   "running": 0,
+   "lane": "server",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 2,
+   "running": 0,
+   "lane": "server",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 2,
+   "running": 0,
+   "lane": "server",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 2,
+   "running": 0,
+   "lane": "server",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 2,
+   "running": 1,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 2,
+   "running": 1,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 2,
+   "running": 1,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 2,
+   "running": 1,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 2,
+   "running": 1,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 2,
+   "running": 1,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 2,
+   "running": 1,
+   "lane": "client",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 2,
+   "running": 1,
+   "lane": "client",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 2,
+   "running": 1,
+   "lane": "server",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 2,
+   "running": 1,
+   "lane": "server",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 2,
+   "running": 1,
+   "lane": "server",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 2,
+   "running": 1,
+   "lane": "server",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 2,
+   "running": 1,
+   "lane": "server",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 3,
+   "running": 0,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 3,
+   "running": 0,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 3,
+   "running": 0,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 3,
+   "running": 0,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 3,
+   "running": 0,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 3,
+   "running": 0,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 3,
+   "running": 0,
+   "lane": "client",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 3,
+   "running": 0,
+   "lane": "client",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 3,
+   "running": 0,
+   "lane": "server",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 3,
+   "running": 0,
+   "lane": "server",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 3,
+   "running": 0,
+   "lane": "server",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 3,
+   "running": 0,
+   "lane": "server",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 3,
+   "running": 0,
+   "lane": "server",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 3,
+   "running": 1,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 3,
+   "running": 1,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 3,
+   "running": 1,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 3,
+   "running": 1,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 3,
+   "running": 1,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 3,
+   "running": 1,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 3,
+   "running": 1,
+   "lane": "client",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 3,
+   "running": 1,
+   "lane": "client",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 3,
+   "running": 1,
+   "lane": "server",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 3,
+   "running": 1,
+   "lane": "server",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 3,
+   "running": 1,
+   "lane": "server",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 3,
+   "running": 1,
+   "lane": "server",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 3,
+   "running": 1,
+   "lane": "server",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 4,
+   "running": 0,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 4,
+   "running": 0,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 4,
+   "running": 0,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 4,
+   "running": 0,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 4,
+   "running": 0,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 4,
+   "running": 0,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 4,
+   "running": 0,
+   "lane": "client",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 4,
+   "running": 0,
+   "lane": "client",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 4,
+   "running": 0,
+   "lane": "server",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 4,
+   "running": 0,
+   "lane": "server",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 4,
+   "running": 0,
+   "lane": "server",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 4,
+   "running": 0,
+   "lane": "server",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 4,
+   "running": 0,
+   "lane": "server",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 4,
+   "running": 1,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 4,
+   "running": 1,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 4,
+   "running": 1,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 4,
+   "running": 1,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 4,
+   "running": 1,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 4,
+   "running": 1,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 4,
+   "running": 1,
+   "lane": "client",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 4,
+   "running": 1,
+   "lane": "client",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 4,
+   "running": 1,
+   "lane": "server",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 4,
+   "running": 1,
+   "lane": "server",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 4,
+   "running": 1,
+   "lane": "server",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 4,
+   "running": 1,
+   "lane": "server",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "old",
+   "drop": 3,
+   "lid": 4,
+   "running": 1,
+   "lane": "server",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 2,
+   "running": 0,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 2,
+   "running": 0,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 2,
+   "running": 0,
+   "lane": "client",
+   "seq": 3,
+   "event": "4",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 2,
+   "running": 0,
+   "lane": "client",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 2,
+   "running": 0,
+   "lane": "client",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 2,
+   "running": 0,
+   "lane": "server",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 2,
+   "running": 0,
+   "lane": "server",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 2,
+   "running": 0,
+   "lane": "server",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 2,
+   "running": 0,
+   "lane": "server",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 2,
+   "running": 0,
+   "lane": "server",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 2,
+   "running": 1,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 2,
+   "running": 1,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 2,
+   "running": 1,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 2,
+   "running": 1,
+   "lane": "client",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 2,
+   "running": 1,
+   "lane": "client",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 2,
+   "running": 1,
+   "lane": "server",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 2,
+   "running": 1,
+   "lane": "server",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 2,
+   "running": 1,
+   "lane": "server",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 2,
+   "running": 1,
+   "lane": "server",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 2,
+   "running": 1,
+   "lane": "server",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 3,
+   "running": 0,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 3,
+   "running": 0,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 3,
+   "running": 0,
+   "lane": "client",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 3,
+   "running": 0,
+   "lane": "client",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 3,
+   "running": 0,
+   "lane": "server",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 3,
+   "running": 0,
+   "lane": "server",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 3,
+   "running": 0,
+   "lane": "server",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 3,
+   "running": 0,
+   "lane": "server",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 3,
+   "running": 0,
+   "lane": "server",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 3,
+   "running": 1,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 3,
+   "running": 1,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 3,
+   "running": 1,
+   "lane": "client",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 3,
+   "running": 1,
+   "lane": "client",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 3,
+   "running": 1,
+   "lane": "server",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 3,
+   "running": 1,
+   "lane": "server",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 3,
+   "running": 1,
+   "lane": "server",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 3,
+   "running": 1,
+   "lane": "server",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 3,
+   "running": 1,
+   "lane": "server",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 4,
+   "running": 0,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 4,
+   "running": 0,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 4,
+   "running": 0,
+   "lane": "client",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 4,
+   "running": 0,
+   "lane": "server",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 4,
+   "running": 0,
+   "lane": "server",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 4,
+   "running": 0,
+   "lane": "server",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 4,
+   "running": 0,
+   "lane": "server",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 4,
+   "running": 0,
+   "lane": "server",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 4,
+   "running": 1,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 4,
+   "running": 1,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 4,
+   "running": 1,
+   "lane": "client",
+   "seq": 3,
+   "event": "409",
+   "kind": "error",
+   "text": "409 Conflict"
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 4,
+   "running": 1,
+   "lane": "server",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 4,
+   "running": 1,
+   "lane": "server",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "new",
+   "drop": 2,
+   "lid": 4,
+   "running": 1,
+   "lane": "server",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 2,
+   "running": 0,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 2,
+   "running": 0,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 2,
+   "running": 0,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 2,
+   "running": 0,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 2,
+   "running": 0,
+   "lane": "client",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 2,
+   "running": 0,
+   "lane": "client",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 2,
+   "running": 0,
+   "lane": "server",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 2,
+   "running": 0,
+   "lane": "server",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 2,
+   "running": 0,
+   "lane": "server",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 2,
+   "running": 0,
+   "lane": "server",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 2,
+   "running": 0,
+   "lane": "server",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 2,
+   "running": 1,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 2,
+   "running": 1,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 2,
+   "running": 1,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 2,
+   "running": 1,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 2,
+   "running": 1,
+   "lane": "client",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 2,
+   "running": 1,
+   "lane": "client",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 2,
+   "running": 1,
+   "lane": "server",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 2,
+   "running": 1,
+   "lane": "server",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 2,
+   "running": 1,
+   "lane": "server",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 2,
+   "running": 1,
+   "lane": "server",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 2,
+   "running": 1,
+   "lane": "server",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 3,
+   "running": 0,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 3,
+   "running": 0,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 3,
+   "running": 0,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 3,
+   "running": 0,
+   "lane": "client",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 3,
+   "running": 0,
+   "lane": "client",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 3,
+   "running": 0,
+   "lane": "server",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 3,
+   "running": 0,
+   "lane": "server",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 3,
+   "running": 0,
+   "lane": "server",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 3,
+   "running": 0,
+   "lane": "server",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 3,
+   "running": 0,
+   "lane": "server",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 3,
+   "running": 1,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 3,
+   "running": 1,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 3,
+   "running": 1,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 3,
+   "running": 1,
+   "lane": "client",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 3,
+   "running": 1,
+   "lane": "client",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 3,
+   "running": 1,
+   "lane": "server",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 3,
+   "running": 1,
+   "lane": "server",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 3,
+   "running": 1,
+   "lane": "server",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 3,
+   "running": 1,
+   "lane": "server",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 3,
+   "running": 1,
+   "lane": "server",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 4,
+   "running": 0,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 4,
+   "running": 0,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 4,
+   "running": 0,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 4,
+   "running": 0,
+   "lane": "client",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 4,
+   "running": 0,
+   "lane": "server",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 4,
+   "running": 0,
+   "lane": "server",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 4,
+   "running": 0,
+   "lane": "server",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 4,
+   "running": 0,
+   "lane": "server",
+   "seq": 4,
+   "event": "4",
+   "kind": "thinking",
+   "text": "Look up the down hosts."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 4,
+   "running": 0,
+   "lane": "server",
+   "seq": 5,
+   "event": "5",
+   "kind": "answer",
+   "text": "web01 and db02."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 4,
+   "running": 1,
+   "lane": "client",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 4,
+   "running": 1,
+   "lane": "client",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 4,
+   "running": 1,
+   "lane": "client",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 4,
+   "running": 1,
+   "lane": "client",
+   "seq": 4,
+   "event": "409",
+   "kind": "error",
+   "text": "409 Conflict"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 4,
+   "running": 1,
+   "lane": "server",
+   "seq": 1,
+   "event": "1",
+   "kind": "prompt",
+   "text": "Which hosts are down?"
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 4,
+   "running": 1,
+   "lane": "server",
+   "seq": 2,
+   "event": "2",
+   "kind": "answer",
+   "text": "Two hosts are down."
+  },
+  {
+   "version": "new",
+   "drop": 3,
+   "lid": 4,
+   "running": 1,
+   "lane": "server",
+   "seq": 3,
+   "event": "3",
+   "kind": "prompt",
+   "text": "Which ones?"
+  }
+ ],
+ "runs": [
+  {
+   "inputs": {
+    "version": "old",
+    "drop": 2,
+    "lid": 2,
+    "running": 0
+   },
+   "rows": [
+    0,
+    12
+   ],
+   "cited_lines": 4,
+   "lines_run": {
+    "src/stream.py": [
+     [
+      42,
+      42
+     ],
+     [
+      46,
+      48
+     ]
+    ]
+   }
+  },
+  {
+   "inputs": {
+    "version": "old",
+    "drop": 2,
+    "lid": 2,
+    "running": 1
+   },
+   "rows": [
+    12,
+    24
+   ],
+   "cited_lines": 10,
+   "lines_run": {
+    "src/stream.py": [
+     [
+      26,
+      27
+     ],
+     [
+      42,
+      42
+     ],
+     [
+      46,
+      48
+     ],
+     [
+      52,
+      55
+     ]
+    ]
+   }
+  },
+  {
+   "inputs": {
+    "version": "old",
+    "drop": 2,
+    "lid": 3,
+    "running": 0
+   },
+   "rows": [
+    24,
+    36
+   ],
+   "cited_lines": 4,
+   "lines_run": {
+    "src/stream.py": [
+     [
+      42,
+      42
+     ],
+     [
+      46,
+      48
+     ]
+    ]
+   }
+  },
+  {
+   "inputs": {
+    "version": "old",
+    "drop": 2,
+    "lid": 3,
+    "running": 1
+   },
+   "rows": [
+    36,
+    48
+   ],
+   "cited_lines": 10,
+   "lines_run": {
+    "src/stream.py": [
+     [
+      26,
+      27
+     ],
+     [
+      42,
+      42
+     ],
+     [
+      46,
+      48
+     ],
+     [
+      52,
+      55
+     ]
+    ]
+   }
+  },
+  {
+   "inputs": {
+    "version": "old",
+    "drop": 2,
+    "lid": 4,
+    "running": 0
+   },
+   "rows": [
+    48,
+    60
+   ],
+   "cited_lines": 4,
+   "lines_run": {
+    "src/stream.py": [
+     [
+      42,
+      42
+     ],
+     [
+      46,
+      48
+     ]
+    ]
+   }
+  },
+  {
+   "inputs": {
+    "version": "old",
+    "drop": 2,
+    "lid": 4,
+    "running": 1
+   },
+   "rows": [
+    60,
+    72
+   ],
+   "cited_lines": 10,
+   "lines_run": {
+    "src/stream.py": [
+     [
+      26,
+      27
+     ],
+     [
+      42,
+      42
+     ],
+     [
+      46,
+      48
+     ],
+     [
+      52,
+      55
+     ]
+    ]
+   }
+  },
+  {
+   "inputs": {
+    "version": "old",
+    "drop": 3,
+    "lid": 2,
+    "running": 0
+   },
+   "rows": [
+    72,
+    85
+   ],
+   "cited_lines": 4,
+   "lines_run": {
+    "src/stream.py": [
+     [
+      42,
+      42
+     ],
+     [
+      46,
+      48
+     ]
+    ]
+   }
+  },
+  {
+   "inputs": {
+    "version": "old",
+    "drop": 3,
+    "lid": 2,
+    "running": 1
+   },
+   "rows": [
+    85,
+    98
+   ],
+   "cited_lines": 10,
+   "lines_run": {
+    "src/stream.py": [
+     [
+      26,
+      27
+     ],
+     [
+      42,
+      42
+     ],
+     [
+      46,
+      48
+     ],
+     [
+      52,
+      55
+     ]
+    ]
+   }
+  },
+  {
+   "inputs": {
+    "version": "old",
+    "drop": 3,
+    "lid": 3,
+    "running": 0
+   },
+   "rows": [
+    98,
+    111
+   ],
+   "cited_lines": 4,
+   "lines_run": {
+    "src/stream.py": [
+     [
+      42,
+      42
+     ],
+     [
+      46,
+      48
+     ]
+    ]
+   }
+  },
+  {
+   "inputs": {
+    "version": "old",
+    "drop": 3,
+    "lid": 3,
+    "running": 1
+   },
+   "rows": [
+    111,
+    124
+   ],
+   "cited_lines": 10,
+   "lines_run": {
+    "src/stream.py": [
+     [
+      26,
+      27
+     ],
+     [
+      42,
+      42
+     ],
+     [
+      46,
+      48
+     ],
+     [
+      52,
+      55
+     ]
+    ]
+   }
+  },
+  {
+   "inputs": {
+    "version": "old",
+    "drop": 3,
+    "lid": 4,
+    "running": 0
+   },
+   "rows": [
+    124,
+    137
+   ],
+   "cited_lines": 4,
+   "lines_run": {
+    "src/stream.py": [
+     [
+      42,
+      42
+     ],
+     [
+      46,
+      48
+     ]
+    ]
+   }
+  },
+  {
+   "inputs": {
+    "version": "old",
+    "drop": 3,
+    "lid": 4,
+    "running": 1
+   },
+   "rows": [
+    137,
+    150
+   ],
+   "cited_lines": 10,
+   "lines_run": {
+    "src/stream.py": [
+     [
+      26,
+      27
+     ],
+     [
+      42,
+      42
+     ],
+     [
+      46,
+      48
+     ],
+     [
+      52,
+      55
+     ]
+    ]
+   }
+  },
+  {
+   "inputs": {
+    "version": "new",
+    "drop": 2,
+    "lid": 2,
+    "running": 0
+   },
+   "rows": [
+    150,
+    160
+   ],
+   "cited_lines": 8,
+   "lines_run": {
+    "src/stream.py": [
+     [
+      31,
+      32
+     ],
+     [
+      34,
+      34
+     ],
+     [
+      36,
+      36
+     ],
+     [
+      38,
+      38
+     ],
+     [
+      46,
+      48
+     ]
+    ]
+   }
+  },
+  {
+   "inputs": {
+    "version": "new",
+    "drop": 2,
+    "lid": 2,
+    "running": 1
+   },
+   "rows": [
+    160,
+    170
+   ],
+   "cited_lines": 15,
+   "lines_run": {
+    "src/stream.py": [
+     [
+      26,
+      27
+     ],
+     [
+      31,
+      32
+     ],
+     [
+      34,
+      34
+     ],
+     [
+      36,
+      38
+     ],
+     [
+      46,
+      48
+     ],
+     [
+      52,
+      55
+     ]
+    ]
+   }
+  },
+  {
+   "inputs": {
+    "version": "new",
+    "drop": 2,
+    "lid": 3,
+    "running": 0
+   },
+   "rows": [
+    170,
+    179
+   ],
+   "cited_lines": 8,
+   "lines_run": {
+    "src/stream.py": [
+     [
+      31,
+      32
+     ],
+     [
+      34,
+      34
+     ],
+     [
+      36,
+      36
+     ],
+     [
+      38,
+      38
+     ],
+     [
+      46,
+      48
+     ]
+    ]
+   }
+  },
+  {
+   "inputs": {
+    "version": "new",
+    "drop": 2,
+    "lid": 3,
+    "running": 1
+   },
+   "rows": [
+    179,
+    188
+   ],
+   "cited_lines": 15,
+   "lines_run": {
+    "src/stream.py": [
+     [
+      26,
+      27
+     ],
+     [
+      31,
+      32
+     ],
+     [
+      34,
+      34
+     ],
+     [
+      36,
+      38
+     ],
+     [
+      46,
+      48
+     ],
+     [
+      52,
+      55
+     ]
+    ]
+   }
+  },
+  {
+   "inputs": {
+    "version": "new",
+    "drop": 2,
+    "lid": 4,
+    "running": 0
+   },
+   "rows": [
+    188,
+    196
+   ],
+   "cited_lines": 8,
+   "lines_run": {
+    "src/stream.py": [
+     [
+      31,
+      32
+     ],
+     [
+      34,
+      34
+     ],
+     [
+      36,
+      36
+     ],
+     [
+      38,
+      38
+     ],
+     [
+      46,
+      48
+     ]
+    ]
+   }
+  },
+  {
+   "inputs": {
+    "version": "new",
+    "drop": 2,
+    "lid": 4,
+    "running": 1
+   },
+   "rows": [
+    196,
+    202
+   ],
+   "cited_lines": 9,
+   "lines_run": {
+    "src/stream.py": [
+     [
+      31,
+      34
+     ],
+     [
+      36,
+      36
+     ],
+     [
+      38,
+      38
+     ],
+     [
+      46,
+      48
+     ]
+    ]
+   }
+  },
+  {
+   "inputs": {
+    "version": "new",
+    "drop": 3,
+    "lid": 2,
+    "running": 0
+   },
+   "rows": [
+    202,
+    213
+   ],
+   "cited_lines": 8,
+   "lines_run": {
+    "src/stream.py": [
+     [
+      31,
+      32
+     ],
+     [
+      34,
+      34
+     ],
+     [
+      36,
+      36
+     ],
+     [
+      38,
+      38
+     ],
+     [
+      46,
+      48
+     ]
+    ]
+   }
+  },
+  {
+   "inputs": {
+    "version": "new",
+    "drop": 3,
+    "lid": 2,
+    "running": 1
+   },
+   "rows": [
+    213,
+    224
+   ],
+   "cited_lines": 15,
+   "lines_run": {
+    "src/stream.py": [
+     [
+      26,
+      27
+     ],
+     [
+      31,
+      32
+     ],
+     [
+      34,
+      34
+     ],
+     [
+      36,
+      38
+     ],
+     [
+      46,
+      48
+     ],
+     [
+      52,
+      55
+     ]
+    ]
+   }
+  },
+  {
+   "inputs": {
+    "version": "new",
+    "drop": 3,
+    "lid": 3,
+    "running": 0
+   },
+   "rows": [
+    224,
+    234
+   ],
+   "cited_lines": 8,
+   "lines_run": {
+    "src/stream.py": [
+     [
+      31,
+      32
+     ],
+     [
+      34,
+      34
+     ],
+     [
+      36,
+      36
+     ],
+     [
+      38,
+      38
+     ],
+     [
+      46,
+      48
+     ]
+    ]
+   }
+  },
+  {
+   "inputs": {
+    "version": "new",
+    "drop": 3,
+    "lid": 3,
+    "running": 1
+   },
+   "rows": [
+    234,
+    244
+   ],
+   "cited_lines": 15,
+   "lines_run": {
+    "src/stream.py": [
+     [
+      26,
+      27
+     ],
+     [
+      31,
+      32
+     ],
+     [
+      34,
+      34
+     ],
+     [
+      36,
+      38
+     ],
+     [
+      46,
+      48
+     ],
+     [
+      52,
+      55
+     ]
+    ]
+   }
+  },
+  {
+   "inputs": {
+    "version": "new",
+    "drop": 3,
+    "lid": 4,
+    "running": 0
+   },
+   "rows": [
+    244,
+    253
+   ],
+   "cited_lines": 8,
+   "lines_run": {
+    "src/stream.py": [
+     [
+      31,
+      32
+     ],
+     [
+      34,
+      34
+     ],
+     [
+      36,
+      36
+     ],
+     [
+      38,
+      38
+     ],
+     [
+      46,
+      48
+     ]
+    ]
+   }
+  },
+  {
+   "inputs": {
+    "version": "new",
+    "drop": 3,
+    "lid": 4,
+    "running": 1
+   },
+   "rows": [
+    253,
+    260
+   ],
+   "cited_lines": 9,
+   "lines_run": {
+    "src/stream.py": [
+     [
+      31,
+      34
+     ],
+     [
+      36,
+      36
+     ],
+     [
+      38,
+      38
+     ],
+     [
+      46,
+      48
+     ]
+    ]
+   }
+  }
+ ],
+ "source": {
+  "kind": "wrong",
+  "of": "reconnect",
+  "of_sha256": "c6c817d6df68e3527142c55e8f22ec3d27c029747eb4eee16e523314d8bae955",
+  "edits": [
+   {
+    "row": 152,
+    "field": "event",
+    "was": "3",
+    "now": "4"
+   }
+  ]
+ },
+ "recorded_at": "2026-10-06T14:17:36Z"
+}

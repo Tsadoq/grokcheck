@@ -2,28 +2,75 @@
 
 How to write one concept video chapter script. The rules come from `research/media/narration.md`; the checks after rendering come from the cancellation video experiment.
 
+## The rule: one picture that changes
+
+A chapter animates the section's diagram or trace as one `scene` that stays on screen for the whole chapter. Beats build it up, highlight the path being narrated and move a marker along it. The viewer watches one picture change, not a slide show of separate boxes. Code appears only when one line must be read, and then as a short excerpt in a band along the bottom of the frame, under the scene.
+
+`video chapter` refuses a chapter that breaks this:
+
+- more than 3 beats and no `scene`;
+- more than one code beat, a code beat longer than 5 lines, or a code line longer than 80 characters;
+- a scene whose box labels would be set under 28 px in a 1080p frame.
+
+## The section's questions stay unanswered
+
+The chapter teaches the first case the section shows, never the case its gate or checkpoint questions ask about. You receive those questions with their answers: do not narrate, caption or label any answer, and do not walk through the asked case even in other words. Pass each gate's correct answer to `video chapter` as `--avoid "<answer>"` (repeat it per answer); it refuses a script whose `say`, `show` or scene labels contain one, matched as whole words in any case.
+
 ## The script file
 
-One JSON object per chapter, written from one chapter spec that `video plan` printed:
+One JSON object per chapter, written from one chapter spec that `video plan` printed. A complete example, a flow reused from the section's Mermaid diagram:
 
 ```json
 {
-  "concept_id": "asyncio-cancellation",
-  "chapter_id": "ch01",
-  "title": "Where the cancel lands",
-  "word_budget": 300,
+  "concept_id": "streaming-events",
+  "chapter_id": "s2",
+  "title": "Opening a stream: 204, 409, replay or follow",
+  "word_budget": 150,
+  "scene": {
+    "kind": "flow",
+    "mermaid": "flowchart TD\n  H[Last-Event-ID: 2] -->|start cursor| R{read}\n  R -->|cursor > end| C[409 Conflict]\n  R -->|turn running| F[follow]\n  F -->|await wake_up| F\n  F -->|its terminal event| D[return]"
+  },
   "beats": [
-    {"say": "A request starts a slow database query. Two seconds later, the user closes the tab.", "show": "request -> query (2 s)"},
-    {"say": "Cancel does not stop the task; the next await does.", "show": "await db.fetch(query)", "code": true,
-     "claims": [{"text": "Cancellation is delivered at the next await.", "backing": {"file": "app/handler.py", "lines": [12, 18]}}]}
+    {"say": "A browser reconnects and sends a Last-Event-ID header of two.", "add": ["H"]},
+    {"say": "The route reads from that cursor before it starts streaming.", "add": ["H->R"], "move": ["H->R"],
+     "show": "events = await supervisor.read(...)\nreturn StreamingResponse(...)", "code": true,
+     "claims": [{"text": "get_events awaits supervisor.read before it creates the StreamingResponse.", "backing": {"file": "api/app.py", "lines": [317, 323]}}]},
+    {"say": "The read call picks one of two answers.", "add": ["R->C", "R->F"]},
+    {"say": "A cursor past the end gets a 409 conflict.", "branch": "R->C"},
+    {"say": "Once it has caught up, it waits on wake_up for the next event.", "add": ["F->F"], "focus": ["F", "F->F"], "move": ["F->F"]},
+    {"say": "It stops after the terminal event of its turn.", "add": ["F->D"], "move": ["F->D"], "show": "read decides the status"}
   ]
 }
 ```
 
-- `say` is one sentence, spelled as a narrator says it: `task dot cancel`, not `task.cancel()`.
-- `show` is what is on screen while it plays: a short phrase, or code with `"code": true`.
-- `claims` use the lesson claim shape. Every factual sentence carries one, backed by the cited lines the spec lists.
+- `say` is one sentence, spelled as a narrator says it. See "Narration" below.
+- `scene` is optional for a chapter of 3 beats or fewer and required above that. Its `kind` is one of:
+  - `flow`: `nodes` (`{"id", "label", "decision"?}`) and `edges` (`{"from", "to", "label"}`), with `direction` `TD` (default) or `LR`; or `mermaid`, a `flowchart` in the subset `A[label] -->|label| B{label}`, so the chapter reuses the section's own diagram. `{...}` marks a decision. Layout is automatic: layers top-down (or left-right), children centred under their parents, an edge back to an earlier node drawn as a loop. An edge's id is `from->to`.
+  - `sequence`: `actors` (`{"id", "label"?}`) in columns and `messages` (`{"from", "to", "label", "id"?}`) in rows below them. A message's id defaults to `m1`, `m2`, ... in order.
+  - `state`: `items` (`{"id", "label"}`) in one row, plus named pointers such as `cursor` or `end` that appear under an item the first time a beat moves them there.
+  Keep it to 12 boxes and labels short: about 18 characters a box or an edge. A long state or a long flow folds into rows (a state, an `LR` flow) or columns (a `TD` flow) when that sets its labels larger; when even the best fold sets them under 28 px, `video chapter` refuses the chapter and says so. Then drop boxes, shorten labels, or move part of the picture to another chapter.
+- Each beat says what changes. Nothing is on screen until a beat adds it.
+  - `add`: ids that appear, in order. Adding a link also adds the boxes at its ends.
+  - `focus`: ids to highlight for this beat; everything else on screen dims.
+  - `move`: in a flow or sequence, the links a marker travels in order (each must start where the previous one ended); in a state, `{"pointer": "item id"}`.
+  - `branch`: the edge a decision takes; it lights up and the decision's other edges and their targets dim.
+  Focus and branch last one beat. Added boxes and pointer positions stay.
+- `show`: with a scene, an optional caption under the picture, or with `"code": true` at most 5 lines of code, each at most 80 characters, in a band along the bottom of the frame. The scene keeps its place and size; a chapter with a code beat leaves room for the band from its first beat. The band goes away on the next beat. Add `"language": "bash"` (or any Pygments name) when it is not Python. Without a scene, `show` is the whole frame: code, `a -> b -> c` boxes (up to four), a list (several lines, `1. a  2. b`, or `a | b`), or one short statement.
+- `claims` use the lesson claim shape. Every factual sentence carries one, backed by the cited lines the spec lists. A claim's text may name identifiers; the narration may not.
 - The narration must stay within `word_budget` (150 words a minute); `video chapter` refuses a script more than 20% over it.
+- A scene needs `--renderer manim`.
+
+## Narration
+
+Say what the code does in plain words, the way a developer explains it to a colleague. `video chapter` refuses a `say` that breaks these:
+
+- At most about 20 words a sentence; more than 25 is refused.
+- Name at most two identifiers in the whole chapter, the ones the viewer must recognise on screen (`wake_up`). Describe the rest: "the read call", not `supervisor dot read`.
+- Never read a class name out word by word ("Cursor Beyond End") or as written (`CursorBeyondEnd`); say what it means ("a cursor past the end is an error").
+- Never read a dotted name, written or spoken (`supervisor.read`, "supervisor dot read").
+- Say an HTTP status with its meaning: "a 409 conflict", "a 204, no content". The speech engine reads it as "four oh nine".
+
+The speech engine also respells a few words before speaking: grokcheck, keepalive, subagent, Last-Event-ID, SSE, JSON, API. Write them normally.
 
 ## Narration checklist
 
@@ -32,7 +79,7 @@ One JSON object per chapter, written from one chapter spec that `video plan` pri
 3. Preview the parts, and make the preview match the sections that follow.
 4. Tell causes, not lists: every mechanism step says why it happens ("at the next await, because that is the only place a coroutine hands control back").
 5. Use at most one analogy, short, at the hardest step.
-6. Make beats concrete: a real value, line, name or failure.
+6. Make beats concrete: a real value, a status, a failure. Let the scene carry names the narration does not say.
 7. Show the failure before the fix.
 8. End with an action: what the viewer does differently next time.
 9. Keep space consistent: if cause sits left and effect right in one beat, keep it there in every beat.
@@ -43,6 +90,6 @@ One JSON object per chapter, written from one chapter spec that `video plan` pri
 
 `video chapter` prints three things to read before the chapter counts as done:
 
-- `contact_sheet`: one frame every three seconds in one image. Look for text too small, code centred instead of left-aligned, labels colliding, anything off the edge.
+- `contact_sheet`: one frame every three seconds in one image, each tile a sixth of full size. Use it to see that the picture changes from tile to tile. It is too small to judge text, so also look at full-size frames of the busiest beats: the code beat, the beat with the most boxes on screen, and the last beat. Write them with `video frames <path> --at <seconds>... --out-dir <dir>` (or `--every <seconds>`), taking each beat's time from just before the `end` of its entry in `cues`, and read the PNGs it lists. Look for text too small, labels colliding and anything off the edge.
 - `transcript_diff`: sentences the speech engine did not say as written, already normalised for US/UK spelling and spoken numbers. A skipped or invented word is a defect; a likely mispronunciation ("except" heard as "accept") needs a human to listen.
 - `claims`: the claim manifest, in the shape `grokcheck ground` prints. A fresh-context subagent judges each claim against its evidence alone. Neither of the other two checks catches a false claim.

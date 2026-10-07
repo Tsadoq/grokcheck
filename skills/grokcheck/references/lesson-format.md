@@ -1,6 +1,6 @@
 # Lesson format
 
-A lesson is one JSON file. Its full shape is pinned by [`../schema/lesson.schema.json`](../schema/lesson.schema.json); `grokcheck validate` checks that shape plus the rules a schema cannot express (unique ids, indexes and lines in range, blank markers matching blanks, code files inside the project, claim symbols inside their cited lines). [`example-lesson.json`](example-lesson.json) is a small complete lesson that passes `validate` and uses every question type.
+A lesson is one JSON file. Its full shape is pinned by [`../schema/lesson.schema.json`](../schema/lesson.schema.json); `grokcheck validate` checks that shape plus the rules a schema cannot express (unique ids, indexes and lines in range, blank markers matching blanks, code files inside the project, claim symbols inside their cited lines). [`example-lesson.json`](example-lesson.json) is a small complete lesson that passes `validate` and uses every question type except the two that need a view, `select_items` and `fill_table`.
 
 Unknown fields are rejected everywhere. Every text field must hold at least one non-space character.
 
@@ -8,7 +8,7 @@ Unknown fields are rejected everywhere. Every text field must hold at least one 
 
 | Field | Required | Meaning |
 |-------|----------|---------|
-| `schema_version` | yes | Always `2`. Version 1 lessons are rejected; bump the number, since a v1 section's `code` still works as sugar (see below). |
+| `schema_version` | yes | `3`. Version `2` lessons still load, but `kinds`, `datasets`, the `view` element, `select_items`, `fill_table` and `predict_state` on a view need `3`. Version 1 lessons are rejected. |
 | `title` | yes | The lesson title shown in the browser. |
 | `scope.summary` | yes | One sentence on what the lesson covers. |
 | `scope.files` | yes | Project-relative paths of the files the lesson covers. |
@@ -17,6 +17,32 @@ Unknown fields are rejected everywhere. Every text field must hold at least one 
 | `seed` | no | Integer fixing the shuffled order of `order_steps` and `parsons`; defaults to a hash of the title. |
 | `plan` | no | Why the lesson is shaped as it is (see below). |
 | `probe` | no | 0 to 2 closed questions asked before the first section (see below). |
+| `kinds` | no | The classes of view item, each `{"id", "label", "colour"}`. See [Kinds and datasets](#kinds-and-datasets). |
+| `datasets` | no | The recorded datasets the lesson's views draw, each `{"id", "held_out"?}`. |
+
+## Kinds and datasets
+
+A view draws its items from a dataset: rows recorded by `grokcheck record` from a driver script that runs the real code, stored in `.grokcheck/data/<id>.json`. Every dataset a view names must be declared under `datasets`; `validate` loads each one and refuses a file whose rows did not come from the cited code running.
+
+```json
+"kinds": [{"id": "prompt", "label": "prompt", "colour": "accent"},
+          {"id": "thinking", "label": "thinking", "colour": "replay"}],
+"datasets": [{"id": "reconnect", "held_out": {"version": "new", "drop": 3, "lid": 4}},
+             {"id": "reconnect-wrong"},
+             {"id": "terms"}]
+```
+
+| Field | Meaning |
+|-------|---------|
+| `kinds[].id` | A value of some view's `encode.class` field. Every value that field takes must be a declared kind. |
+| `kinds[].label` | Printed on every chip of that kind, so colour is never the only signal. |
+| `kinds[].colour` | One of `accent`, `ok`, `warn`, `bad`, `replay`, `num`, `fn`, `muted`. |
+| `datasets[].id` | The file `.grokcheck/data/<id>.json`. |
+| `datasets[].held_out` | A [selector](#selectors) over the dataset's fields. Section views never show these rows; final and probe questions may. |
+
+A dataset's `source.kind` is `run` (recorded from a driver), `trace` (flattened from a `trace record` file), `authored` (typed rows, each citing project lines) or `wrong` (a copy of another dataset with one or more edited values). Sections may not draw a `wrong` dataset.
+
+The page shows where each view's rows came from, for example "Recorded from `.grokcheck/drivers/reconnect.py` at `a1b2c3d`, 23 cited lines ran."
 
 ## Plan
 
@@ -29,7 +55,7 @@ Every field is required.
 | `content` | Which of `structure`, `behaviour`, `change`, `tests` the lesson covers, no repeats. |
 | `media` | Element or question types the lesson uses. Each must appear in some section's elements or checkpoints. |
 | `rejected` | Element or question types considered and left out. |
-| `rationale` | At least one sentence, shown to the reader under "Why this lesson looks like this". |
+| `rationale` | An array of one or more sentences, one string each, shown to the reader under "Why this lesson looks like this". |
 | `default_depth` | `short` or `detail`: the starting view when no probe answer is wrong. |
 
 ## Probe
@@ -53,7 +79,7 @@ Identifiers start with a letter or digit and hold only letters, digits, `-` and 
 
 ## Elements
 
-Every element has a `type` and an optional `depth`: `short` (the default) or `detail`. A `detail` element holds material a reader who already knows the basics can skip; the page hides it when the reader picks the short view.
+Every element has a `type` and an optional `depth`: `short` (the default) or `detail`. A `detail` element holds material a reader who already knows the basics can skip; the page hides it when the reader picks the short view. The lint wants at least one element other than `prose` and `code` in every section's short view, and never a `diagram` in `detail`; see the media rules in [authoring-guide.md](authoring-guide.md).
 
 | `type` | Fields | Shows |
 |--------|--------|-------|
@@ -274,6 +300,141 @@ A narrated video, usually a concept video chapter or film from `grokcheck_media 
 {"type": "video", "id": "cancel-ch01", "src": "/home/me/.cache/grokcheck/videos/asyncio-cancellation/ch01/3f2a9c1e5b7d4a60/video.mp4", "captions": "/home/me/.cache/grokcheck/videos/asyncio-cancellation/ch01/3f2a9c1e5b7d4a60/captions.vtt", "duration": 118.4, "transcript": "A request starts a slow database query..."}
 ```
 
+### `view`
+
+A picture drawn from dataset rows, in one of five layouts. The page never computes anything from the rows: `validate` derives the items (rows plus reserved fields such as `_lost`), and the page draws them and evaluates selectors over them.
+
+```json
+{"type": "view", "id": "v-drop", "layout": "lanes", "data": "reconnect",
+ "caption": "Which events reach the browser?",
+ "where": {"version": "new", "drop": 2, "lid": 2, "running": 0},
+ "encode": {"lane": "lane", "x": "seq", "key": "event", "label": "text", "class": "kind",
+            "ref_lane": "server",
+            "lanes": [{"value": "server", "label": "transcript has"},
+                      {"value": "client", "label": "browser received"}]},
+ "marks": [{"where": {"lane": "server", "seq": 2}, "text": "drops after frame {seq}", "tone": "bad"}],
+ "layers": [{"id": "wire", "label": "Show the wire frames", "fields": ["seq", "kind"]}],
+ "notes": [{"where": {"lane": "client", "kind": "thinking"}, "text": "The thinking event arrives as frame 4."}]}
+```
+
+| Field | Required | Meaning |
+|-------|----------|---------|
+| `id` | yes | Unique among element and question ids. The page uses it as the DOM id, so `#v-drop` scrolls to it. |
+| `layout` | yes | `lanes`, `table`, `steps`, `blocks` or `decision`. |
+| `caption` | yes | The question the picture answers. |
+| `data` | yes, except for an inline steps view | A declared dataset. |
+| `where` | no | A [selector](#selectors) over dataset fields, applied before items are built. Default `{}`. |
+| `encode` | per layout | Which dataset field plays which part; every named field must exist in the dataset. |
+| `split` | no | A field. One pane per value, in first-appearance order, drawn at the same positions, so two versions sit side by side. |
+| `inputs` | no | Controls that choose a scenario, or `{"from": "<view id>"}` to share another view's controls in the same section. |
+| `presets` | no | Named scenarios: `{"label", "values": {field: value}}`. |
+| `tasks` | no | `{"text", "when": <selector>}`. A task is met when any item of the current scenario matches `when`; the view is done once every task was met. Tasks are not graded. |
+| `missing` | when some input combination has no rows | The text the status line shows for such a combination. |
+| `marks` | no | `{"where", "text", "tone"?, "place"?}`. `place` is `column` (above the matched item's column, lanes only) or `status`. `text` may hold `{field}`, filled from the first matched item. `tone`: `ok`, `warn`, `bad`, `accent`, `muted`. |
+| `layers` | no | `{"id", "label", "fields", "where"?, "on"?}`: a toggle that shows extra fields under the matched items. |
+| `notes` | no | `{"where", "text"}`: statements about the matched items. Each is a claim backed by the rows it matches; in a table they fill a "Why" column. |
+| `mask`, `fill`, `gate` | no | See [Gates and masks](#gates-and-masks). |
+
+#### Layouts
+
+| Layout | `encode` (required in bold) | Items | Reader answers by |
+|--------|-----------------------------|-------|-------------------|
+| `lanes` | **`lane`**, **`x`**, **`key`**, **`label`**, `class`, `ref_lane`, `lanes`, `link` | Chips per lane along `x`. With `ref_lane`, a key the reference lane has and another lane lacks becomes a lost item. | `select_items` on masked `?` cells, or tasks |
+| `table` | **`columns`** (`[{"field", "label"}]`), **`key`**, `class`, `link` | One row per item; two rows with the same key are an error. | `fill_table` on `fill` cells, or `select_items` on rows |
+| `steps` | inline: none; data: **`file`**, **`line`**, **`key`**, `show`, `link` | One step per authored step or per item. | `predict_state` with `view` and `step` |
+| `blocks` | **`group`**, **`key`**, **`label`**, `class`, `group_label`, `link` | Chips in one box per group value. | Never gated; its section needs a checkpoint |
+| `decision` | none; uses `nodes` | One item per node per scenario. | `select_items` on nodes, or tasks |
+
+`lanes` orders lanes by `encode.lanes`, else by first appearance. `link` names the field whose value links items across the section's views (default `key`): selecting an item highlights every item, step and node with the same link.
+
+An inline `steps` view is a code walk with no dataset:
+
+```json
+{"type": "view", "id": "v-walk", "layout": "steps", "caption": "read(), a few lines at a time",
+ "steps": [{"code": {"file": "src/stream.py", "lines": [[30, 32], [35, 35]]},
+            "note": "A cursor past the end raises Beyond.", "link": ["beyond"]}]}
+```
+
+`lines` is one `[start, end]` span or a list of spans, all from one file. A step shows at most 6 lines in total, and its spans sit at most 40 lines apart. Each `note` is a claim backed by the step's lines. A data `steps` view makes one step per item and shows the item's `line` with two lines either side, plus its `show` fields as state chips.
+
+A `decision` view draws the branches a function takes, computed from the lines each recorded run executed:
+
+```json
+{"type": "view", "id": "v-read", "layout": "decision", "data": "reconnect",
+ "inputs": {"from": "v-scrub"}, "caption": "Which answer does read() pick?",
+ "nodes": [
+   {"id": "beyond", "label": "cursor > end?", "kind": "check",
+    "code": {"file": "src/stream.py", "lines": [32, 32]}, "yes": {"lines": [33, 33]},
+    "note": "Checked first, running or not."},
+   {"id": "409", "label": "409 Conflict", "kind": "outcome", "tone": "bad",
+    "code": {"file": "src/stream.py", "lines": [33, 33]}, "note": "Beyond maps to 409.",
+    "example": {"version": "new", "drop": 2, "lid": 4, "running": 1}}],
+ "tasks": [{"text": "Make read() answer 409.", "when": {"node": "409", "_taken": true}}]}
+```
+
+A node is taken in a scenario when any line of its `code` ran in that run. A check with `yes` answers `"yes"` when a `yes` line ran, else `"no"`. Node files must be cited by the dataset. `example` names input values that have a recorded run; clicking the node moves the shared inputs there. Each node `note` is a claim backed by its lines.
+
+#### Items
+
+Items are the selected rows plus reserved fields, which selectors outside `where` may use:
+
+| Field | Meaning |
+|-------|---------|
+| `_cell` | Pane, lane and key joined with `\|`, leaving out the parts a layout lacks. The unit a reader picks. |
+| `_id` | `_cell`, plus `#n` for the n-th repeat. |
+| `_link` | The `link` field's value; a node's id on a decision view. |
+| `_pane` | The `split` value. |
+| `_lost` | lanes: the reference lane has this key and this lane does not. |
+| `_dup` | lanes: this cell occurred earlier in the lane. |
+| `_burst` | lanes: another item of the lane shares this column. |
+| `_differs` | With `split`: no other pane has the same item. |
+| `_taken`, `node`, `kind`, `answer` | decision items. |
+| `_edited` | The row was edited in a `wrong` copy. Never sent to the page. |
+
+#### Inputs
+
+```json
+"inputs": [{"field": "drop", "label": "Connection drops after frame", "control": "range", "default": 2},
+           {"field": "lid", "label": "Last-Event-ID sent back", "control": "range", "default": 2,
+            "follows": "drop", "hint": "An EventSource sends the last id it saw."},
+           {"field": "running", "label": "Turn 2 still running", "control": "toggle", "default": 0}]
+```
+
+An input's values are the distinct values of its field after `where` and held-out rows are applied. `range` needs numbers, `toggle` exactly two values, `select` any. `default` must be one of the values. With `follows`, the input takes the named input's new value whenever it changes, if that value exists. A view with inputs holds the items of every scenario and the page filters them.
+
+#### Gates and masks
+
+A view without a `gate` shows everything. The first view over each dataset should be that whole first case; the lint warns when it is gated.
+
+`gate` names a checkpoint of the same section that names this view: `select_items`, `fill_table`, or `predict_state` with `view`. A gated view has no inputs, and its `where` selects exactly one scenario (one combination of the dataset's recorded inputs, the `split` field aside). Until the gate is answered the page gets:
+
+| Layout | Withheld | Shown instead |
+|--------|----------|---------------|
+| `lanes` | Every item of each lane `mask` touches; `mask` must cover whole lanes and the view needs `ref_lane` | One `?` cell per reference-lane key, at that key's column |
+| `table` | The `fill` fields of items `mask` matches (default all) | Empty cells, filled through `fill_table` |
+| `decision` | Which nodes were taken and each check's answer (`mask` not allowed) | Untaken-looking nodes |
+| `steps` | The note and state chips from the asked `step` on | The code lines |
+
+With `split`, `mask` may cover one pane, so the reader sees the old pane and predicts the new one. The answer feedback carries the full items and the view unmasks.
+
+A view must be asked about: it needs a `gate`, a same-section checkpoint whose `view` is its id, or `tasks`. A `blocks` view only needs some checkpoint in its section.
+
+Limits: at most 5000 items per view, at most 512 KB per view as JSON, gated payload included, and 4 MB over all views of a lesson.
+
+## Selectors
+
+`where`, `held_out`, `mask`, `answer`, `marks[].where`, `notes[].where`, `layers[].where`, `tasks[].when` and a data backing's `rows` share one JSON grammar:
+
+| Form | Holds when |
+|------|------------|
+| `{}` | Always. |
+| `{"field": value}` | The field equals the value. |
+| `{"field": [a, b]}` | The field equals one of them. |
+| `{"field": {"gte": 3, "lt": 9}}` | The field is a number within every bound (`gt`, `gte`, `lt`, `lte`). |
+| `{"and": [s, ...]}`, `{"or": [s, ...]}`, `{"not": s}` | Every one, at least one, or not the selector. |
+
+Several keys in one object must all hold. A missing field reads as `null`. Equality is strict about types: `true` never equals `1`, while `1` equals `1.0`. `where`, `held_out` and data backings may name dataset fields only; the rest may also name the reserved item fields of their layout.
+
 ## Claims
 
 Any element takes an optional `claims` array: the statements it makes, each with exactly one piece of evidence. The page lists them under the element, and the export lists them with their citation.
@@ -292,6 +453,9 @@ Any element takes an optional `claims` array: the statements it makes, each with
 | Source | `url`, `version` | Nothing; use it for library docs at a pinned version. | `url @ version` |
 | Spike | `spike_id` | An identifier. | `spike <id>` |
 | Unverified | `reason` | Nothing. | A warning badge with the reason. |
+| Data | `data`, `rows` (a selector) | The dataset is declared and `rows` matches at least one of its rows. | `recorded data <id>` |
+
+A view's notes, its steps' notes and its decision nodes' notes are claims too, addressed as `sections[i].elements[j].notes[k]`, `.steps[k]` and `.nodes[k]`. Recorded rows are evidence and are never judged; an authored dataset's rows are claims checked against their `cite`.
 
 ```json
 "claims": [
@@ -392,15 +556,16 @@ Answers are normalised before matching: Unicode NFC, curly quotes straightened, 
 
 ### `predict_state`
 
-A prediction made with a trace on screen, before the step it asks about is revealed. Allowed only as a checkpoint of the section that holds the trace, so it never counts toward the final score; its answer and confidence still reach the debrief.
+A prediction made with a trace or a steps view on screen, before the step it asks about is revealed. Allowed only as a checkpoint of the section that holds the trace or view, so it never counts toward the final score; its answer and confidence still reach the debrief.
 
 | Field | Meaning |
 |-------|---------|
-| `trace_id` | The trace element it asks about. |
-| `version`, `step` | 0-based indexes of the version and authored step being predicted; both must exist. |
+| `trace_id`, `version` | The trace element it asks about, and the 0-based version. |
+| `view` | Instead of `trace_id` and `version`: a `steps` view of the same section. |
+| `step` | 0-based index of the step being predicted; it must exist. |
 | `options`, `correct` | As `single_choice`. |
 
-Graded as `single_choice`. Name it in the trace's `gate` to hold back that step and every later one until it is answered.
+Graded as `single_choice`. Name it in the trace's or view's `gate` to hold back that step and every later one until it is answered.
 
 ### `mutation_quiz`
 
@@ -449,6 +614,42 @@ The reader assembles code from shuffled lines, leaving out the distractors, and 
 
 Every line and distractor text must be distinct. The reader sees all texts shuffled (by `seed`) without indentation. Using any distractor is `incorrect`. Every line in order at its indent is `correct`; otherwise `partial`, scored by the longest run of lines in the right relative order, counting only lines at the right indent.
 
+### `select_items`
+
+The reader clicks items on a view: the `?` cells of a masked lane, table rows, or decision nodes.
+
+```json
+{"type": "select_items", "id": "cp-lost", "view": "v-drop2",
+ "prompt": "The browser reconnects with Last-Event-ID 4. Click the frames it never gets.",
+ "answer": {"_pane": "new", "lane": "client", "_lost": true},
+ "explanation": "Frames 3 and 4 sit between the drop and the cursor."}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `view` | A checkpoint names a view of its section by id; that view has no inputs. A final or probe question holds an inline view object instead. |
+| `answer` | A selector over the view's full items. The cells it matches are the answer. |
+
+The candidates are the `?` cells of a masked view, else every item's cell. `validate` refuses an answer that matches nothing, matches every candidate, or matches a cell that is not a candidate. Scored like `multiple_choice`: the exact set is `correct`, otherwise `partial` by overlap.
+
+### `fill_table`
+
+The reader fills the masked cells of a `table` view, choosing each value from a list of the values that field takes anywhere in the dataset.
+
+```json
+{"type": "fill_table", "id": "cp-kinds", "view": "v-rules",
+ "prompt": "Fill in the kind of frames 3 to 5.",
+ "explanation": "The second turn is a prompt, a thinking event and an answer."}
+```
+
+The view must be a `table` with `fill`, and in a section this question is its `gate`. The score is the share of blanks filled with the recorded value: `correct` at 1, `partial` above 0, else `incorrect`.
+
+### Questions on an inline view
+
+In `final` and `probe`, `select_items` and `fill_table` carry their view inline: the view object with `"type": "view"` and without `id`, `gate`, `inputs`, `notes`, `claims` and `depth`. Its `where` selects one scenario. With `mask` it stays masked for good, since final questions never reveal before submit. Inline views may draw held-out rows and `wrong` datasets, which sections may not. A transfer item is a final question whose inline view shows only held-out rows; a wrong-data item is a final `select_items` over a `wrong` dataset, usually with `"answer": {"_edited": true}` and the prompt "One item is wrong. Which?".
+
 ## Outcomes
 
 `results.json` gives every answered question one outcome: `correct`, `incorrect`, `partial`, `needs_review` or `self_rated`. Its `summary` lists the final questions that are `needs_review`, `self_rated`, and `confident_wrong` (rated `sure` but not `correct`).
+
+Each item under `checkpoints`, `final` and `probe` also names its `element`: `view:<layout>` for a question on a view, `trace` for a `predict_state` on a trace, the type of the element the question gates, or `null`. `by_element` gives, per element name, the checkpoints `answered`, how many were `correct`, and their `mean_score`.

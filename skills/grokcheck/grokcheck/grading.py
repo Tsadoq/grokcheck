@@ -15,6 +15,8 @@ Responses arrive as decoded JSON from the browser, shaped per question type:
 - `fix_the_bug`: `{"passed": ...}`, the result of the server's own test run.
 - `change_impact`: a list of candidate indexes.
 - `parsons`: `[{"text": ..., "indent": ...}]`, the lines the reader placed, in order.
+- `select_items`: a list of the `_cell` strings the reader picked.
+- `fill_table`: `{"<cell>": {"<field>": value}}`, one value per blank.
 
 A response of the wrong shape raises `ResponseError`.
 """
@@ -24,13 +26,14 @@ from __future__ import annotations
 import re
 import unicodedata
 from bisect import bisect_left
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Literal, TypeVar
 
 from grokcheck.lesson import (
     Blank,
     ChangeImpact,
     FillBlank,
+    FillTable,
     FixTheBug,
     MultipleChoice,
     Mutation,
@@ -43,9 +46,11 @@ from grokcheck.lesson import (
     PickLine,
     PredictOutput,
     PredictState,
+    SelectItems,
     SingleChoice,
     TestCase,
 )
+from grokcheck.selector import same
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -70,6 +75,7 @@ _CURLY_QUOTES = str.maketrans(
         "\N{DOUBLE HIGH-REVERSED-9 QUOTATION MARK}": '"',
     },
 )
+_T = TypeVar("_T")
 _SPACE_AROUND_SYMBOL = re.compile(r"\s*([^\w\s])\s*")
 _WHITESPACE_RUN = re.compile(r"\s+")
 
@@ -87,6 +93,8 @@ class Reveal:
     `tests` and `log` are a mutation quiz's run; `mutation` is a fixed bug's
     original line.
     `lines` and `distractors` are a Parsons problem's solution and decoys.
+    `answer_cells` are the cells a `select_items` answer holds, `cells` the
+    right values of a `fill_table`.
     `element_payload` is what a gated element withheld until this answer.
     """
 
@@ -104,6 +112,8 @@ class Reveal:
     mutation: Mutation | None = None
     lines: tuple[ParsonsLine, ...] = ()
     distractors: tuple[Option, ...] = ()
+    answer_cells: tuple[str, ...] = ()
+    cells: dict[str, dict[str, object]] = field(default_factory=dict)
     element_payload: dict[str, object] | None = None
 
 
@@ -237,6 +247,12 @@ def _grade(  # noqa: C901
         case Parsons(lines=lines, distractors=distractors):
             result = _parsons(response, lines, distractors)
             reveal = Reveal(explanation, lines=lines, distractors=distractors)
+        case SelectItems(candidates=candidates, answer_cells=answer_cells):
+            result = _overlap(_cells(response, candidates), set(answer_cells))
+            reveal = Reveal(explanation, answer_cells=answer_cells)
+        case FillTable(cells=cells):
+            result = _table(response, cells)
+            reveal = Reveal(explanation, cells=cells)
     return (*result, reveal)
 
 
@@ -248,12 +264,44 @@ def _exact(is_correct: bool) -> tuple[Outcome, float]:  # noqa: FBT001
     return ("correct", 1.0) if is_correct else ("incorrect", 0.0)
 
 
-def _overlap(chosen: set[int], correct: set[int]) -> tuple[Outcome, float]:
+def _overlap(chosen: set[_T], correct: set[_T]) -> tuple[Outcome, float]:
     """Exact match is correct; otherwise partial by Jaccard index, or incorrect at 0."""
     if chosen == correct:
         return "correct", 1.0
     union = chosen | correct
     score = len(chosen & correct) / len(union) if union else 0.0
+    return ("partial" if score else "incorrect"), score
+
+
+def _cells(response: Response, candidates: tuple[str, ...]) -> set[str]:
+    picked = _items(response)
+    if not all(isinstance(cell, str) and cell in candidates for cell in picked):
+        msg = "must list cells of the view"
+        raise ResponseError(msg)
+    return {str(cell) for cell in picked}
+
+
+def _table(
+    response: Response, cells: dict[str, dict[str, object]]
+) -> tuple[Outcome, float]:
+    """Score the share of blanks filled with the recorded value."""
+    msg = "must map each cell to an object of field values"
+    if not isinstance(response, dict):
+        raise ResponseError(msg)
+    given: dict[str, dict[str, object]] = {}
+    for cell, row in response.items():
+        if not isinstance(row, dict):
+            raise ResponseError(msg)
+        given[cell] = row
+    total = sum(len(row) for row in cells.values())
+    right = sum(
+        field_name in given.get(cell, {}) and same(given[cell][field_name], value)
+        for cell, row in cells.items()
+        for field_name, value in row.items()
+    )
+    score = right / total if total else 0.0
+    if score == 1:
+        return "correct", 1.0
     return ("partial" if score else "incorrect"), score
 
 

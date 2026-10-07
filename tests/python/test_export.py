@@ -252,3 +252,34 @@ def test_obsidian_export_writes_new_note_and_never_overwrites(tmp_path: Path) ->
         pytest.fail("\n".join(problems))
     with pytest.raises(CliError, match="already exists"):
         write_note(tmp_path, lesson.title, text)
+
+
+def test_export_renders_views_as_tables_and_steps_as_code_with_notes() -> None:
+    """A view leaves a table of its items, a steps view its code and notes.
+
+    The markdown export has no page to draw on, so each view becomes text the
+    reader can reread.
+    """
+    lesson = load_lesson(
+        FIXTURES / "lessons" / "valid_views.json", FIXTURES / "project"
+    )
+    expected = [
+        "**Which events reach the browser?**",
+        "| lane | seq | event | text | kind | |",
+        "| client | 4 | 4 | Look up the down hosts. | thinking |  |",
+        "1. A cursor past the end raises Beyond.",
+        "`src/stream.py` lines 30-33",
+        "| version | lane | seq | event | text | kind | |",
+        "| old | client | 1 | 1 | Which hosts are down? | prompt | repeat |",
+        (
+            "- **409 Conflict** (outcome, `src/stream.py` lines 33-33):"
+            " Beyond maps to 409."
+        ),
+        "**Drop after frame 3, cursor 4**",
+    ]
+
+    lines = render_markdown(lesson, {}, []).splitlines()
+
+    missing = [line for line in expected if line not in lines]
+    if missing:
+        pytest.fail(f"lines missing from the export: {missing}")

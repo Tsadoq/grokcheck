@@ -1,0 +1,140 @@
+{
+  "schema_version": 3,
+  "title": "Reconnect views",
+  "scope": {
+    "summary": "read() in src/stream.py.",
+    "files": [
+      "src/stream.py"
+    ]
+  },
+  "kinds": [
+    {
+      "id": "prompt",
+      "label": "prompt",
+      "colour": "accent"
+    },
+    {
+      "id": "answer",
+      "label": "answer",
+      "colour": "ok"
+    },
+    {
+      "id": "thinking",
+      "label": "thinking",
+      "colour": "replay"
+    },
+    {
+      "id": "error",
+      "label": "error",
+      "colour": "bad"
+    }
+  ],
+  "datasets": [
+    {
+      "id": "reconnect",
+      "held_out": {
+        "version": "new",
+        "drop": 3,
+        "lid": 4
+      }
+    }
+  ],
+  "sections": [
+    {
+      "id": "s",
+      "title": "One reconnect",
+      "body": "The browser reconnects.",
+      "elements": [
+        {
+          "type": "view",
+          "id": "v",
+          "layout": "lanes",
+          "data": "reconnect",
+          "caption": "Which events arrive?",
+          "where": {
+            "version": "new",
+            "drop": 2,
+            "lid": 2,
+            "running": 0
+          },
+          "encode": {
+            "lane": "lane",
+            "x": "seq",
+            "key": "event",
+            "label": "text",
+            "class": "kind",
+            "ref_lane": "server"
+          }
+        }
+      ],
+      "checkpoints": [
+        {
+          "id": "f4",
+          "type": "single_choice",
+          "prompt": "Which frame comes 4 after the drop?",
+          "options": [
+            {
+              "text": "Frame 3",
+              "why": "It follows frame 2."
+            },
+            {
+              "text": "Frame 1",
+              "why": "It came before."
+            }
+          ],
+          "correct": 0
+        }
+      ]
+    }
+  ],
+  "final": [
+    {
+      "id": "f1",
+      "type": "single_choice",
+      "prompt": "Which frame comes 1 after the drop?",
+      "options": [
+        {
+          "text": "Frame 3",
+          "why": "It follows frame 2."
+        },
+        {
+          "text": "Frame 1",
+          "why": "It came before."
+        }
+      ],
+      "correct": 0
+    },
+    {
+      "id": "f2",
+      "type": "single_choice",
+      "prompt": "Which frame comes 2 after the drop?",
+      "options": [
+        {
+          "text": "Frame 3",
+          "why": "It follows frame 2."
+        },
+        {
+          "text": "Frame 1",
+          "why": "It came before."
+        }
+      ],
+      "correct": 0
+    },
+    {
+      "id": "f3",
+      "type": "single_choice",
+      "prompt": "Which frame comes 3 after the drop?",
+      "options": [
+        {
+          "text": "Frame 3",
+          "why": "It follows frame 2."
+        },
+        {
+          "text": "Frame 1",
+          "why": "It came before."
+        }
+      ],
+      "correct": 0
+    }
+  ]
+}

@@ -383,3 +383,70 @@ def test_open_names_the_type_when_no_union_member_matches(tmp_path: Path) -> Non
 
     with pytest.raises(RunError, match=r"no member of .* matches the snapshot keys"):
         LessonRun.open(run.lesson_dir)
+
+
+def test_results_name_the_element_of_each_answer_and_score_by_element(
+    tmp_path: Path,
+) -> None:
+    """Each answer names the element it is about, and checkpoints sum per element.
+
+    The debrief reads `by_element` to see which kind of picture taught well.
+    """
+    project = tmp_path / "project"
+    shutil.copytree(FIXTURES / "project", project)
+    lesson = load_lesson(FIXTURES / "lessons" / "valid_views.json", project)
+    run = LessonRun.create(lesson, project)
+
+    run.answer("cp-lost", ["new|client|3", "new|client|4"])
+    run.answer("cp-prompts", ["client|1"])
+    run.answer("cp-walk", 2)
+    run.answer("cp-names", 0)
+    run.answer("f-transfer", ["client|4"])
+    run.answer("f-wrong", ["client|4"])
+    run.answer("f-kinds", {"1": {"kind": "prompt"}})
+    run.answer("f-order", 0)
+    run.submit()
+
+    results = json.loads((run.lesson_dir / "results.json").read_text("utf-8"))
+    elements = {
+        item["question_id"]: item["element"]
+        for item in (*results["checkpoints"], *results["final"])
+    }
+    if elements != {
+        "cp-lost": "view:lanes",
+        "cp-prompts": "view:lanes",
+        "cp-walk": "view:steps",
+        "cp-names": None,
+        "f-transfer": "view:lanes",
+        "f-wrong": "view:lanes",
+        "f-kinds": "view:table",
+        "f-order": None,
+    }:
+        pytest.fail(f"elements {elements}")
+    by_element = results["by_element"]
+    if by_element["view:lanes"] != {"answered": 2, "correct": 1, "mean_score": 0.75}:
+        pytest.fail(f"by_element {by_element}")
+    if set(by_element) != {"view:lanes", "view:steps", "null"}:
+        pytest.fail(f"by_element keys {sorted(by_element)}")
+
+
+def test_a_retake_keeps_the_kinds_and_datasets_its_frames_draw(
+    tmp_path: Path,
+) -> None:
+    """A retake has no sections, but its frames still need kinds and provenance."""
+    project = tmp_path / "project"
+    shutil.copytree(FIXTURES / "project", project)
+    lesson = load_lesson(FIXTURES / "lessons" / "valid_views.json", project)
+    run = LessonRun.create(lesson, project)
+    run.answer("f-transfer", [])
+    run.answer("f-wrong", [])
+    run.answer("f-kinds", {})
+    run.answer("f-order", 1)
+    run.submit()
+
+    retake = LessonRun.retake_from(run.lesson_dir, {"incorrect", "partial"})
+
+    if retake.kinds != lesson.kinds or retake.datasets != lesson.datasets:
+        pytest.fail("the retake dropped the lesson's kinds or datasets")
+    if not any(getattr(q, "frame", None) for q in retake.final):
+        pytest.fail("the retake lost its framed questions")

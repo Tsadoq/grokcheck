@@ -1,17 +1,20 @@
 """Grading of reader responses as the reader and the agent see the outcome."""
 
 import pytest
-from grokcheck.grading import grade
+from grokcheck.grading import ResponseError, grade
 from grokcheck.lesson import (
     Blank,
     ChangeImpact,
     FillBlank,
+    FillTable,
     FixTheBug,
     Mutation,
     MutationQuiz,
     Option,
     Parsons,
     ParsonsLine,
+    SelectItems,
+    TableBlank,
 )
 from grokcheck.lesson import TestCase as MutantTest
 
@@ -145,3 +148,58 @@ def test_change_impact_scores_overlap_and_reveals_affected() -> None:
     expected = ("partial", 0.5, (0, 1, 3), 4)
     if got != expected:
         pytest.fail(f"expected (outcome, score, affected, whys) {expected}, got {got}")
+
+
+def test_select_items_scores_overlap_and_refuses_cells_off_the_view() -> None:
+    """Picking cells scores by overlap; a cell the view lacks is a malformed answer."""
+    question = SelectItems(
+        id="lost",
+        prompt="Click the frames that never arrive.",
+        answer={"_lost": True},
+        candidates=("c|1", "c|2", "c|3", "c|4"),
+        answer_cells=("c|3", "c|4"),
+    )
+    expected = {
+        ("c|3", "c|4"): ("correct", 1.0),
+        ("c|3",): ("partial", 0.5),
+        ("c|1",): ("incorrect", 0.0),
+        (): ("incorrect", 0.0),
+    }
+
+    got = {
+        picked: (g.outcome, g.score)
+        for picked in expected
+        if ((g := grade(question, list(picked))).outcome, g.score) != expected[picked]
+    }
+    if got:
+        pytest.fail(f"expected {expected}, these differ: {got}")
+    if grade(question, ["c|3"]).reveal.answer_cells != ("c|3", "c|4"):
+        pytest.fail("the reveal does not name the answer cells")
+    with pytest.raises(ResponseError):
+        grade(question, ["c|9"])
+
+
+def test_fill_table_scores_each_blank_and_counts_a_missing_one_wrong() -> None:
+    """Each blank is one share of the score; values compare with strict types."""
+    question = FillTable(
+        id="kinds",
+        prompt="Fill in the kinds.",
+        blanks=(TableBlank("3", "kind"), TableBlank("4", "running")),
+        cells={"3": {"kind": "prompt"}, "4": {"running": 1}},
+    )
+    expected: dict[str, tuple[dict[str, object], str]] = {
+        "all right": ({"3": {"kind": "prompt"}, "4": {"running": 1}}, "correct"),
+        "bool for int": ({"3": {"kind": "prompt"}, "4": {"running": True}}, "partial"),
+        "one missing": ({"3": {"kind": "prompt"}}, "partial"),
+        "none": ({}, "incorrect"),
+    }
+
+    got = {
+        name: outcome
+        for name, (response, want) in expected.items()
+        if (outcome := grade(question, response).outcome) != want
+    }
+    if got:
+        pytest.fail(f"outcomes that differ: {got}")
+    with pytest.raises(ResponseError):
+        grade(question, {"3": "prompt"})

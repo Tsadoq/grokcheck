@@ -1,0 +1,4753 @@
+{
+ "schema_version": 3,
+ "title": "How a reconnecting stream replays events",
+ "intro": null,
+ "scope": {
+  "summary": "The event log and read() in src/stream.py, and the producer in src/producer.py.",
+  "files": [
+   "src/stream.py",
+   "src/producer.py"
+  ]
+ },
+ "plan": {
+  "subject": "area",
+  "time_budget": 30,
+  "content": [
+   "structure",
+   "behaviour"
+  ],
+  "media": [
+   "view",
+   "select_items",
+   "fill_table",
+   "predict_state"
+  ],
+  "rejected": [],
+  "rationale": [
+   "Recorded runs of the reconnect driver show what the browser receives for each drop.",
+   "The producer recording adds a second dataset because it shows task switching that the stream runs cannot show.",
+   "The terms dataset is authored because names are read from the code and no run shows them."
+  ],
+  "default_depth": "short"
+ },
+ "kinds": [
+  {
+   "id": "prompt",
+   "label": "prompt",
+   "colour": "accent"
+  },
+  {
+   "id": "answer",
+   "label": "answer",
+   "colour": "ok"
+  },
+  {
+   "id": "thinking",
+   "label": "thinking",
+   "colour": "replay"
+  },
+  {
+   "id": "error",
+   "label": "error",
+   "colour": "bad"
+  }
+ ],
+ "datasets": [
+  {
+   "id": "reconnect",
+   "kind": "run",
+   "script": ".grokcheck/drivers/reconnect.py",
+   "trace": null,
+   "head": "cd5b5d1da15f8092cdd0ec108381db47d5ba0cc7",
+   "recorded_at": "2026-10-06T14:17:36Z",
+   "cited": [
+    "src/stream.py"
+   ],
+   "cited_lines_run": 17
+  },
+  {
+   "id": "terms",
+   "kind": "authored",
+   "script": null,
+   "trace": null,
+   "head": "cd5b5d1da15f8092cdd0ec108381db47d5ba0cc7",
+   "recorded_at": "2026-10-06T14:14:29Z",
+   "cited": [
+    "src/stream.py"
+   ],
+   "cited_lines_run": 0
+  },
+  {
+   "id": "producer",
+   "kind": "trace",
+   "script": null,
+   "trace": ".grokcheck/traces/producer.json",
+   "head": "cd5b5d1da15f8092cdd0ec108381db47d5ba0cc7",
+   "recorded_at": "2026-10-06T14:08:26Z",
+   "cited": [
+    "src/producer.py"
+   ],
+   "cited_lines_run": 12
+  }
+ ],
+ "probe": [],
+ "sections": [
+  {
+   "id": "names",
+   "title": "The names in the stream",
+   "body": "Four names carry this lesson. Two belong to reading and two to the paths a read takes.",
+   "elements": [
+    {
+     "type": "view",
+     "id": "v-terms",
+     "layout": "blocks",
+     "caption": "Which names belong together?",
+     "data": "terms",
+     "where": {},
+     "encode": {
+      "group": "group",
+      "key": "term",
+      "label": "term",
+      "group_label": "group"
+     },
+     "depth": "short",
+     "inputs": [],
+     "presets": [],
+     "tasks": [],
+     "marks": [],
+     "layers": [],
+     "notes": [],
+     "nodes": [],
+     "fill": [],
+     "choices": {},
+     "claims": [],
+     "steps": [],
+     "items": [
+      {
+       "term": "cursor",
+       "group": "reading",
+       "meaning": "The id of the last event the reader saw.",
+       "_link": "cursor",
+       "_cell": "reading|cursor",
+       "_id": "reading|cursor"
+      },
+      {
+       "term": "Beyond",
+       "group": "reading",
+       "meaning": "Raised when the cursor is past the last event.",
+       "_link": "Beyond",
+       "_cell": "reading|Beyond",
+       "_id": "reading|Beyond"
+      },
+      {
+       "term": "replay",
+       "group": "paths",
+       "meaning": "Yields the stored events after the cursor.",
+       "_link": "replay",
+       "_cell": "paths|replay",
+       "_id": "paths|replay"
+      },
+      {
+       "term": "follow",
+       "group": "paths",
+       "meaning": "Replays, then yields events as the running turn appends them.",
+       "_link": "follow",
+       "_cell": "paths|follow",
+       "_id": "paths|follow"
+      }
+     ]
+    }
+   ],
+   "checkpoints": [
+    {
+     "id": "cp-names",
+     "prompt": "Which name is raised when the cursor is past the last event?",
+     "options": [
+      {
+       "text": "`AtEnd`"
+      },
+      {
+       "text": "`Beyond`"
+      },
+      {
+       "text": "`replay`"
+      }
+     ],
+     "type": "single_choice"
+    }
+   ]
+  },
+  {
+   "id": "replay",
+   "title": "One reconnect, shown whole",
+   "body": "The browser drops after frame 2 and reconnects with Last-Event-ID 2. Compare what the transcript has with what the browser received.",
+   "elements": [
+    {
+     "type": "view",
+     "id": "v-drop",
+     "layout": "lanes",
+     "caption": "Which events reach the browser?",
+     "data": "reconnect",
+     "where": {
+      "version": "new",
+      "drop": 2,
+      "lid": 2,
+      "running": 0
+     },
+     "encode": {
+      "lane": "lane",
+      "x": "seq",
+      "key": "event",
+      "label": "text",
+      "class": "kind",
+      "ref_lane": "server",
+      "lanes": [
+       {
+        "value": "server",
+        "label": "transcript has"
+       },
+       {
+        "value": "client",
+        "label": "browser received"
+       }
+      ]
+     },
+     "depth": "short",
+     "inputs": [],
+     "presets": [],
+     "tasks": [],
+     "marks": [
+      {
+       "where": {
+        "lane": "server",
+        "seq": 2
+       },
+       "text": "connection drops after frame {seq}",
+       "tone": "bad",
+       "place": "column"
+      }
+     ],
+     "layers": [
+      {
+       "id": "wire",
+       "label": "Show the wire frames",
+       "fields": [
+        "seq",
+        "kind"
+       ],
+       "where": {},
+       "on": false
+      }
+     ],
+     "notes": [
+      {
+       "where": {
+        "lane": "client",
+        "kind": "thinking"
+       },
+       "text": "The browser gets the thinking event as frame 4.",
+       "verified": "unchecked"
+      }
+     ],
+     "nodes": [],
+     "fill": [],
+     "choices": {},
+     "claims": [],
+     "steps": [],
+     "items": [
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "lane": "server",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_cell": "server|1",
+       "_id": "server|1",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "lane": "server",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_cell": "server|2",
+       "_id": "server|2",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "lane": "server",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_cell": "server|3",
+       "_id": "server|3",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "lane": "server",
+       "seq": 4,
+       "event": "4",
+       "kind": "thinking",
+       "text": "Look up the down hosts.",
+       "_link": "4",
+       "_cell": "server|4",
+       "_id": "server|4",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "lane": "server",
+       "seq": 5,
+       "event": "5",
+       "kind": "answer",
+       "text": "web01 and db02.",
+       "_link": "5",
+       "_cell": "server|5",
+       "_id": "server|5",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "lane": "client",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_cell": "client|1",
+       "_id": "client|1",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "lane": "client",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_cell": "client|2",
+       "_id": "client|2",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "lane": "client",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_cell": "client|3",
+       "_id": "client|3",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "lane": "client",
+       "seq": 4,
+       "event": "4",
+       "kind": "thinking",
+       "text": "Look up the down hosts.",
+       "_link": "4",
+       "_cell": "client|4",
+       "_id": "client|4",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "lane": "client",
+       "seq": 5,
+       "event": "5",
+       "kind": "answer",
+       "text": "web01 and db02.",
+       "_link": "5",
+       "_cell": "client|5",
+       "_id": "client|5",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      }
+     ]
+    },
+    {
+     "type": "view",
+     "id": "v-walk",
+     "layout": "steps",
+     "caption": "read(), a few lines at a time",
+     "where": {},
+     "encode": {},
+     "gate": "cp-walk",
+     "depth": "short",
+     "inputs": [],
+     "presets": [],
+     "tasks": [],
+     "marks": [],
+     "layers": [],
+     "notes": [],
+     "nodes": [],
+     "fill": [],
+     "choices": {},
+     "claims": [],
+     "steps": [
+      {
+       "code": {
+        "file": "src/stream.py",
+        "language": "python",
+        "spans": [
+         {
+          "start_line": 30,
+          "text": "def read(log: Log, cursor: int, *, running: bool) -> Iterator[Frame]:\n    end = len(log.events)\n    if cursor > end:\n        raise Beyond(cursor)"
+         }
+        ]
+       },
+       "note": "A cursor past the end raises Beyond.",
+       "link": [
+        "beyond"
+       ],
+       "show": {},
+       "verified": "unchecked"
+      },
+      {
+       "code": {
+        "file": "src/stream.py",
+        "language": "python",
+        "spans": [
+         {
+          "start_line": 34,
+          "text": "    if cursor == end and not running:\n        raise AtEnd(cursor)"
+         },
+         {
+          "start_line": 36,
+          "text": "    if running:\n        return _follow(log, cursor)\n    return _replay(log, cursor)"
+         }
+        ]
+       },
+       "note": "A running turn follows. A finished one replays.",
+       "link": [
+        "follow",
+        "replay"
+       ],
+       "show": {},
+       "verified": "unchecked"
+      },
+      {
+       "code": {
+        "file": "src/stream.py",
+        "language": "python",
+        "spans": [
+         {
+          "start_line": 45,
+          "text": "def _replay(log: Log, cursor: int) -> Iterator[Frame]:\n    for index in range(cursor, len(log.events)):\n        kind, text = log.events[index]\n        yield Frame(index + 1, kind, text)"
+         }
+        ]
+       },
+       "link": [
+        "replay"
+       ],
+       "verified": "unchecked",
+       "_masked": true
+      }
+     ],
+     "items": []
+    }
+   ],
+   "checkpoints": [
+    {
+     "id": "cp-walk",
+     "prompt": "Five events are stored and the cursor is 2. Which frames does replay yield?",
+     "view": "v-walk",
+     "step": 2,
+     "options": [
+      {
+       "text": "Frames 2, 3, 4 and 5"
+      },
+      {
+       "text": "Frames 1 to 5"
+      },
+      {
+       "text": "Frames 3, 4 and 5"
+      }
+     ],
+     "type": "predict_state"
+    },
+    {
+     "id": "cp-prompts",
+     "prompt": "Click the prompts the browser received.",
+     "view": "v-drop",
+     "candidates": [
+      "server|1",
+      "server|2",
+      "server|3",
+      "server|4",
+      "server|5",
+      "client|1",
+      "client|2",
+      "client|3",
+      "client|4",
+      "client|5"
+     ],
+     "type": "select_items"
+    }
+   ]
+  },
+  {
+   "id": "loss",
+   "title": "When the cursor runs ahead",
+   "body": "Now the browser drops after frame 2 but sends Last-Event-ID 4. The old reader ignores the cursor. The new one trusts it.",
+   "elements": [
+    {
+     "type": "view",
+     "id": "v-drop2",
+     "layout": "lanes",
+     "caption": "What does the new reader lose?",
+     "data": "reconnect",
+     "where": {
+      "drop": 2,
+      "lid": 4,
+      "running": 0
+     },
+     "encode": {
+      "lane": "lane",
+      "x": "seq",
+      "key": "event",
+      "label": "text",
+      "class": "kind",
+      "ref_lane": "server",
+      "lanes": [
+       {
+        "value": "server",
+        "label": "transcript has"
+       },
+       {
+        "value": "client",
+        "label": "browser received"
+       }
+      ]
+     },
+     "split": "version",
+     "mask": {
+      "_pane": "new",
+      "lane": "client"
+     },
+     "gate": "cp-lost",
+     "depth": "short",
+     "inputs": [],
+     "presets": [],
+     "tasks": [],
+     "marks": [],
+     "layers": [],
+     "notes": [],
+     "nodes": [],
+     "fill": [],
+     "choices": {},
+     "claims": [],
+     "steps": [],
+     "items": [
+      {
+       "version": "old",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "server",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_pane": "old",
+       "_cell": "old|server|1",
+       "_id": "old|server|1",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "old",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "server",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_pane": "old",
+       "_cell": "old|server|2",
+       "_id": "old|server|2",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "old",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "server",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_pane": "old",
+       "_cell": "old|server|3",
+       "_id": "old|server|3",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "old",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "server",
+       "seq": 4,
+       "event": "4",
+       "kind": "thinking",
+       "text": "Look up the down hosts.",
+       "_link": "4",
+       "_pane": "old",
+       "_cell": "old|server|4",
+       "_id": "old|server|4",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "old",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "server",
+       "seq": 5,
+       "event": "5",
+       "kind": "answer",
+       "text": "web01 and db02.",
+       "_link": "5",
+       "_pane": "old",
+       "_cell": "old|server|5",
+       "_id": "old|server|5",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "old",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "client",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_pane": "old",
+       "_cell": "old|client|1",
+       "_id": "old|client|1",
+       "_dup": false,
+       "_lost": false,
+       "_burst": true
+      },
+      {
+       "version": "old",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "client",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_pane": "old",
+       "_cell": "old|client|1",
+       "_id": "old|client|1#2",
+       "_dup": true,
+       "_lost": false,
+       "_burst": true
+      },
+      {
+       "version": "old",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "client",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_pane": "old",
+       "_cell": "old|client|2",
+       "_id": "old|client|2",
+       "_dup": false,
+       "_lost": false,
+       "_burst": true
+      },
+      {
+       "version": "old",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "client",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_pane": "old",
+       "_cell": "old|client|2",
+       "_id": "old|client|2#2",
+       "_dup": true,
+       "_lost": false,
+       "_burst": true
+      },
+      {
+       "version": "old",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "client",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_pane": "old",
+       "_cell": "old|client|3",
+       "_id": "old|client|3",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "old",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "client",
+       "seq": 4,
+       "event": "4",
+       "kind": "thinking",
+       "text": "Look up the down hosts.",
+       "_link": "4",
+       "_pane": "old",
+       "_cell": "old|client|4",
+       "_id": "old|client|4",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "old",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "client",
+       "seq": 5,
+       "event": "5",
+       "kind": "answer",
+       "text": "web01 and db02.",
+       "_link": "5",
+       "_pane": "old",
+       "_cell": "old|client|5",
+       "_id": "old|client|5",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "server",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_pane": "new",
+       "_cell": "new|server|1",
+       "_id": "new|server|1",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "server",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_pane": "new",
+       "_cell": "new|server|2",
+       "_id": "new|server|2",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "server",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_pane": "new",
+       "_cell": "new|server|3",
+       "_id": "new|server|3",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "server",
+       "seq": 4,
+       "event": "4",
+       "kind": "thinking",
+       "text": "Look up the down hosts.",
+       "_link": "4",
+       "_pane": "new",
+       "_cell": "new|server|4",
+       "_id": "new|server|4",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "server",
+       "seq": 5,
+       "event": "5",
+       "kind": "answer",
+       "text": "web01 and db02.",
+       "_link": "5",
+       "_pane": "new",
+       "_cell": "new|server|5",
+       "_id": "new|server|5",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "_cell": "new|client|1",
+       "_id": "new|client|1",
+       "_masked": true,
+       "lane": "client",
+       "seq": 1,
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "_pane": "new"
+      },
+      {
+       "_cell": "new|client|2",
+       "_id": "new|client|2",
+       "_masked": true,
+       "lane": "client",
+       "seq": 2,
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "_pane": "new"
+      },
+      {
+       "_cell": "new|client|3",
+       "_id": "new|client|3",
+       "_masked": true,
+       "lane": "client",
+       "seq": 3,
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "_pane": "new"
+      },
+      {
+       "_cell": "new|client|4",
+       "_id": "new|client|4",
+       "_masked": true,
+       "lane": "client",
+       "seq": 4,
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "_pane": "new"
+      },
+      {
+       "_cell": "new|client|5",
+       "_id": "new|client|5",
+       "_masked": true,
+       "lane": "client",
+       "seq": 5,
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "_pane": "new"
+      }
+     ]
+    },
+    {
+     "type": "view",
+     "id": "v-rules",
+     "layout": "table",
+     "caption": "What kind is each stored event?",
+     "data": "reconnect",
+     "where": {
+      "version": "new",
+      "drop": 2,
+      "lid": 2,
+      "running": 0,
+      "lane": "server"
+     },
+     "encode": {
+      "columns": [
+       {
+        "field": "seq",
+        "label": "frame"
+       },
+       {
+        "field": "text",
+        "label": "text"
+       },
+       {
+        "field": "kind",
+        "label": "kind"
+       }
+      ],
+      "key": "seq",
+      "class": "kind"
+     },
+     "mask": {
+      "seq": {
+       "gte": 3
+      }
+     },
+     "gate": "cp-kinds",
+     "depth": "short",
+     "inputs": [],
+     "presets": [],
+     "tasks": [],
+     "marks": [],
+     "layers": [],
+     "notes": [],
+     "nodes": [],
+     "fill": [
+      "kind"
+     ],
+     "choices": {
+      "kind": [
+       "answer",
+       "error",
+       "prompt",
+       "thinking"
+      ]
+     },
+     "claims": [],
+     "steps": [],
+     "items": [
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "lane": "server",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_cell": "1",
+       "_id": "1"
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "lane": "server",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_cell": "2",
+       "_id": "2"
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "lane": "server",
+       "seq": 3,
+       "event": "3",
+       "kind": null,
+       "text": "Which ones?",
+       "_link": "3",
+       "_cell": "3",
+       "_id": "3",
+       "_masked": true
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "lane": "server",
+       "seq": 4,
+       "event": "4",
+       "kind": null,
+       "text": "Look up the down hosts.",
+       "_link": "4",
+       "_cell": "4",
+       "_id": "4",
+       "_masked": true
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "lane": "server",
+       "seq": 5,
+       "event": "5",
+       "kind": null,
+       "text": "web01 and db02.",
+       "_link": "5",
+       "_cell": "5",
+       "_id": "5",
+       "_masked": true
+      }
+     ]
+    }
+   ],
+   "checkpoints": [
+    {
+     "id": "cp-lost",
+     "prompt": "The new reader resumes from cursor 4. Click the frames the browser never gets.",
+     "view": "v-drop2",
+     "candidates": [
+      "new|client|1",
+      "new|client|2",
+      "new|client|3",
+      "new|client|4",
+      "new|client|5"
+     ],
+     "type": "select_items"
+    },
+    {
+     "id": "cp-kinds",
+     "prompt": "Fill in the kind of frames 3 to 5.",
+     "view": "v-rules",
+     "blanks": [
+      {
+       "cell": "3",
+       "field": "kind"
+      },
+      {
+       "cell": "4",
+       "field": "kind"
+      },
+      {
+       "cell": "5",
+       "field": "kind"
+      }
+     ],
+     "type": "fill_table"
+    }
+   ]
+  },
+  {
+   "id": "scrub",
+   "title": "Try every reconnect",
+   "body": "Move the drop and the cursor. Watch which branch of read() runs for each case.",
+   "elements": [
+    {
+     "type": "view",
+     "id": "v-scrub",
+     "layout": "lanes",
+     "caption": "What does the browser get for each reconnect?",
+     "data": "reconnect",
+     "where": {
+      "version": "new"
+     },
+     "encode": {
+      "lane": "lane",
+      "x": "seq",
+      "key": "event",
+      "label": "text",
+      "class": "kind",
+      "ref_lane": "server"
+     },
+     "missing": "Drop 3 with cursor 4 is kept for the final quiz.",
+     "depth": "short",
+     "inputs": [
+      {
+       "field": "drop",
+       "label": "Connection drops after frame",
+       "control": "range",
+       "default": 2,
+       "follows": null,
+       "hint": "",
+       "values": [
+        2,
+        3
+       ]
+      },
+      {
+       "field": "lid",
+       "label": "Last-Event-ID sent back",
+       "control": "range",
+       "default": 2,
+       "follows": "drop",
+       "hint": "An EventSource sends the last id it saw.",
+       "values": [
+        2,
+        3,
+        4
+       ]
+      },
+      {
+       "field": "running",
+       "label": "Turn 2 still running",
+       "control": "toggle",
+       "default": 0,
+       "follows": null,
+       "hint": "",
+       "values": [
+        0,
+        1
+       ]
+      }
+     ],
+     "presets": [
+      {
+       "label": "short drop",
+       "values": {
+        "drop": 2,
+        "lid": 2,
+        "running": 0
+       }
+      }
+     ],
+     "tasks": [
+      {
+       "text": "Find a reconnect that answers 409.",
+       "when": {
+        "lane": "client",
+        "event": "409"
+       }
+      },
+      {
+       "text": "Find a reconnect that loses a frame.",
+       "when": {
+        "lane": "client",
+        "_lost": true
+       }
+      }
+     ],
+     "marks": [],
+     "layers": [],
+     "notes": [],
+     "nodes": [],
+     "fill": [],
+     "choices": {},
+     "claims": [],
+     "steps": [],
+     "items": [
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "lane": "client",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_cell": "client|1",
+       "_id": "client|1",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "lane": "client",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_cell": "client|2",
+       "_id": "client|2",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "lane": "client",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_cell": "client|3",
+       "_id": "client|3",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "lane": "client",
+       "seq": 4,
+       "event": "4",
+       "kind": "thinking",
+       "text": "Look up the down hosts.",
+       "_link": "4",
+       "_cell": "client|4",
+       "_id": "client|4",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "lane": "client",
+       "seq": 5,
+       "event": "5",
+       "kind": "answer",
+       "text": "web01 and db02.",
+       "_link": "5",
+       "_cell": "client|5",
+       "_id": "client|5",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "lane": "server",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_cell": "server|1",
+       "_id": "server|1",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "lane": "server",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_cell": "server|2",
+       "_id": "server|2",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "lane": "server",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_cell": "server|3",
+       "_id": "server|3",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "lane": "server",
+       "seq": 4,
+       "event": "4",
+       "kind": "thinking",
+       "text": "Look up the down hosts.",
+       "_link": "4",
+       "_cell": "server|4",
+       "_id": "server|4",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "lane": "server",
+       "seq": 5,
+       "event": "5",
+       "kind": "answer",
+       "text": "web01 and db02.",
+       "_link": "5",
+       "_cell": "server|5",
+       "_id": "server|5",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 1,
+       "lane": "client",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_cell": "client|1",
+       "_id": "client|1",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 1,
+       "lane": "client",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_cell": "client|2",
+       "_id": "client|2",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 1,
+       "lane": "client",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_cell": "client|3",
+       "_id": "client|3",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 1,
+       "lane": "client",
+       "seq": 4,
+       "event": "4",
+       "kind": "thinking",
+       "text": "Look up the down hosts.",
+       "_link": "4",
+       "_cell": "client|4",
+       "_id": "client|4",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 1,
+       "lane": "client",
+       "seq": 5,
+       "event": "5",
+       "kind": "answer",
+       "text": "web01 and db02.",
+       "_link": "5",
+       "_cell": "client|5",
+       "_id": "client|5",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 1,
+       "lane": "server",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_cell": "server|1",
+       "_id": "server|1",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 1,
+       "lane": "server",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_cell": "server|2",
+       "_id": "server|2",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 1,
+       "lane": "server",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_cell": "server|3",
+       "_id": "server|3",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 1,
+       "lane": "server",
+       "seq": 4,
+       "event": "4",
+       "kind": "thinking",
+       "text": "Look up the down hosts.",
+       "_link": "4",
+       "_cell": "server|4",
+       "_id": "server|4",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 1,
+       "lane": "server",
+       "seq": 5,
+       "event": "5",
+       "kind": "answer",
+       "text": "web01 and db02.",
+       "_link": "5",
+       "_cell": "server|5",
+       "_id": "server|5",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 0,
+       "lane": "client",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_cell": "client|1",
+       "_id": "client|1",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 0,
+       "lane": "client",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_cell": "client|2",
+       "_id": "client|2",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 0,
+       "lane": "client",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_cell": "client|3",
+       "_id": "client|3",
+       "_dup": false,
+       "_lost": true,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 0,
+       "lane": "client",
+       "seq": 4,
+       "event": "4",
+       "kind": "thinking",
+       "text": "Look up the down hosts.",
+       "_link": "4",
+       "_cell": "client|4",
+       "_id": "client|4",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 0,
+       "lane": "client",
+       "seq": 5,
+       "event": "5",
+       "kind": "answer",
+       "text": "web01 and db02.",
+       "_link": "5",
+       "_cell": "client|5",
+       "_id": "client|5",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 0,
+       "lane": "server",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_cell": "server|1",
+       "_id": "server|1",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 0,
+       "lane": "server",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_cell": "server|2",
+       "_id": "server|2",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 0,
+       "lane": "server",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_cell": "server|3",
+       "_id": "server|3",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 0,
+       "lane": "server",
+       "seq": 4,
+       "event": "4",
+       "kind": "thinking",
+       "text": "Look up the down hosts.",
+       "_link": "4",
+       "_cell": "server|4",
+       "_id": "server|4",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 0,
+       "lane": "server",
+       "seq": 5,
+       "event": "5",
+       "kind": "answer",
+       "text": "web01 and db02.",
+       "_link": "5",
+       "_cell": "server|5",
+       "_id": "server|5",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 1,
+       "lane": "client",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_cell": "client|1",
+       "_id": "client|1",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 1,
+       "lane": "client",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_cell": "client|2",
+       "_id": "client|2",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 1,
+       "lane": "client",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_cell": "client|3",
+       "_id": "client|3",
+       "_dup": false,
+       "_lost": true,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 1,
+       "lane": "client",
+       "seq": 4,
+       "event": "4",
+       "kind": "thinking",
+       "text": "Look up the down hosts.",
+       "_link": "4",
+       "_cell": "client|4",
+       "_id": "client|4",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 1,
+       "lane": "client",
+       "seq": 5,
+       "event": "5",
+       "kind": "answer",
+       "text": "web01 and db02.",
+       "_link": "5",
+       "_cell": "client|5",
+       "_id": "client|5",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 1,
+       "lane": "server",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_cell": "server|1",
+       "_id": "server|1",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 1,
+       "lane": "server",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_cell": "server|2",
+       "_id": "server|2",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 1,
+       "lane": "server",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_cell": "server|3",
+       "_id": "server|3",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 1,
+       "lane": "server",
+       "seq": 4,
+       "event": "4",
+       "kind": "thinking",
+       "text": "Look up the down hosts.",
+       "_link": "4",
+       "_cell": "server|4",
+       "_id": "server|4",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 1,
+       "lane": "server",
+       "seq": 5,
+       "event": "5",
+       "kind": "answer",
+       "text": "web01 and db02.",
+       "_link": "5",
+       "_cell": "server|5",
+       "_id": "server|5",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "client",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_cell": "client|1",
+       "_id": "client|1",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "client",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_cell": "client|2",
+       "_id": "client|2",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "client",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_cell": "client|3",
+       "_id": "client|3",
+       "_dup": false,
+       "_lost": true,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "client",
+       "seq": 4,
+       "event": "4",
+       "kind": "thinking",
+       "text": "Look up the down hosts.",
+       "_link": "4",
+       "_cell": "client|4",
+       "_id": "client|4",
+       "_dup": false,
+       "_lost": true,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "client",
+       "seq": 5,
+       "event": "5",
+       "kind": "answer",
+       "text": "web01 and db02.",
+       "_link": "5",
+       "_cell": "client|5",
+       "_id": "client|5",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "server",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_cell": "server|1",
+       "_id": "server|1",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "server",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_cell": "server|2",
+       "_id": "server|2",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "server",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_cell": "server|3",
+       "_id": "server|3",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "server",
+       "seq": 4,
+       "event": "4",
+       "kind": "thinking",
+       "text": "Look up the down hosts.",
+       "_link": "4",
+       "_cell": "server|4",
+       "_id": "server|4",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "lane": "server",
+       "seq": 5,
+       "event": "5",
+       "kind": "answer",
+       "text": "web01 and db02.",
+       "_link": "5",
+       "_cell": "server|5",
+       "_id": "server|5",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 1,
+       "lane": "client",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_cell": "client|1",
+       "_id": "client|1",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 1,
+       "lane": "client",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_cell": "client|2",
+       "_id": "client|2",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 1,
+       "lane": "client",
+       "seq": 3,
+       "event": "409",
+       "kind": "error",
+       "text": "409 Conflict",
+       "_link": "409",
+       "_cell": "client|409",
+       "_id": "client|409",
+       "_dup": false,
+       "_lost": false,
+       "_burst": true
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 1,
+       "lane": "client",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_cell": "client|3",
+       "_id": "client|3",
+       "_dup": false,
+       "_lost": true,
+       "_burst": true
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 1,
+       "lane": "server",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_cell": "server|1",
+       "_id": "server|1",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 1,
+       "lane": "server",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_cell": "server|2",
+       "_id": "server|2",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 1,
+       "lane": "server",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_cell": "server|3",
+       "_id": "server|3",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 0,
+       "lane": "client",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_cell": "client|1",
+       "_id": "client|1",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 0,
+       "lane": "client",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_cell": "client|2",
+       "_id": "client|2",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 0,
+       "lane": "client",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_cell": "client|3",
+       "_id": "client|3",
+       "_dup": false,
+       "_lost": false,
+       "_burst": true
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 0,
+       "lane": "client",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_cell": "client|3",
+       "_id": "client|3#2",
+       "_dup": true,
+       "_lost": false,
+       "_burst": true
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 0,
+       "lane": "client",
+       "seq": 4,
+       "event": "4",
+       "kind": "thinking",
+       "text": "Look up the down hosts.",
+       "_link": "4",
+       "_cell": "client|4",
+       "_id": "client|4",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 0,
+       "lane": "client",
+       "seq": 5,
+       "event": "5",
+       "kind": "answer",
+       "text": "web01 and db02.",
+       "_link": "5",
+       "_cell": "client|5",
+       "_id": "client|5",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 0,
+       "lane": "server",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_cell": "server|1",
+       "_id": "server|1",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 0,
+       "lane": "server",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_cell": "server|2",
+       "_id": "server|2",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 0,
+       "lane": "server",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_cell": "server|3",
+       "_id": "server|3",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 0,
+       "lane": "server",
+       "seq": 4,
+       "event": "4",
+       "kind": "thinking",
+       "text": "Look up the down hosts.",
+       "_link": "4",
+       "_cell": "server|4",
+       "_id": "server|4",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 0,
+       "lane": "server",
+       "seq": 5,
+       "event": "5",
+       "kind": "answer",
+       "text": "web01 and db02.",
+       "_link": "5",
+       "_cell": "server|5",
+       "_id": "server|5",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 1,
+       "lane": "client",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_cell": "client|1",
+       "_id": "client|1",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 1,
+       "lane": "client",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_cell": "client|2",
+       "_id": "client|2",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 1,
+       "lane": "client",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_cell": "client|3",
+       "_id": "client|3",
+       "_dup": false,
+       "_lost": false,
+       "_burst": true
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 1,
+       "lane": "client",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_cell": "client|3",
+       "_id": "client|3#2",
+       "_dup": true,
+       "_lost": false,
+       "_burst": true
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 1,
+       "lane": "client",
+       "seq": 4,
+       "event": "4",
+       "kind": "thinking",
+       "text": "Look up the down hosts.",
+       "_link": "4",
+       "_cell": "client|4",
+       "_id": "client|4",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 1,
+       "lane": "client",
+       "seq": 5,
+       "event": "5",
+       "kind": "answer",
+       "text": "web01 and db02.",
+       "_link": "5",
+       "_cell": "client|5",
+       "_id": "client|5",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 1,
+       "lane": "server",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_cell": "server|1",
+       "_id": "server|1",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 1,
+       "lane": "server",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_cell": "server|2",
+       "_id": "server|2",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 1,
+       "lane": "server",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_cell": "server|3",
+       "_id": "server|3",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 1,
+       "lane": "server",
+       "seq": 4,
+       "event": "4",
+       "kind": "thinking",
+       "text": "Look up the down hosts.",
+       "_link": "4",
+       "_cell": "server|4",
+       "_id": "server|4",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 1,
+       "lane": "server",
+       "seq": 5,
+       "event": "5",
+       "kind": "answer",
+       "text": "web01 and db02.",
+       "_link": "5",
+       "_cell": "server|5",
+       "_id": "server|5",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 0,
+       "lane": "client",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_cell": "client|1",
+       "_id": "client|1",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 0,
+       "lane": "client",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_cell": "client|2",
+       "_id": "client|2",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 0,
+       "lane": "client",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_cell": "client|3",
+       "_id": "client|3",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 0,
+       "lane": "client",
+       "seq": 4,
+       "event": "4",
+       "kind": "thinking",
+       "text": "Look up the down hosts.",
+       "_link": "4",
+       "_cell": "client|4",
+       "_id": "client|4",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 0,
+       "lane": "client",
+       "seq": 5,
+       "event": "5",
+       "kind": "answer",
+       "text": "web01 and db02.",
+       "_link": "5",
+       "_cell": "client|5",
+       "_id": "client|5",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 0,
+       "lane": "server",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_cell": "server|1",
+       "_id": "server|1",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 0,
+       "lane": "server",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_cell": "server|2",
+       "_id": "server|2",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 0,
+       "lane": "server",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_cell": "server|3",
+       "_id": "server|3",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 0,
+       "lane": "server",
+       "seq": 4,
+       "event": "4",
+       "kind": "thinking",
+       "text": "Look up the down hosts.",
+       "_link": "4",
+       "_cell": "server|4",
+       "_id": "server|4",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 0,
+       "lane": "server",
+       "seq": 5,
+       "event": "5",
+       "kind": "answer",
+       "text": "web01 and db02.",
+       "_link": "5",
+       "_cell": "server|5",
+       "_id": "server|5",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 1,
+       "lane": "client",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_cell": "client|1",
+       "_id": "client|1",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 1,
+       "lane": "client",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_cell": "client|2",
+       "_id": "client|2",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 1,
+       "lane": "client",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_cell": "client|3",
+       "_id": "client|3",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 1,
+       "lane": "client",
+       "seq": 4,
+       "event": "4",
+       "kind": "thinking",
+       "text": "Look up the down hosts.",
+       "_link": "4",
+       "_cell": "client|4",
+       "_id": "client|4",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 1,
+       "lane": "client",
+       "seq": 5,
+       "event": "5",
+       "kind": "answer",
+       "text": "web01 and db02.",
+       "_link": "5",
+       "_cell": "client|5",
+       "_id": "client|5",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 1,
+       "lane": "server",
+       "seq": 1,
+       "event": "1",
+       "kind": "prompt",
+       "text": "Which hosts are down?",
+       "_link": "1",
+       "_cell": "server|1",
+       "_id": "server|1",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 1,
+       "lane": "server",
+       "seq": 2,
+       "event": "2",
+       "kind": "answer",
+       "text": "Two hosts are down.",
+       "_link": "2",
+       "_cell": "server|2",
+       "_id": "server|2",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 1,
+       "lane": "server",
+       "seq": 3,
+       "event": "3",
+       "kind": "prompt",
+       "text": "Which ones?",
+       "_link": "3",
+       "_cell": "server|3",
+       "_id": "server|3",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 1,
+       "lane": "server",
+       "seq": 4,
+       "event": "4",
+       "kind": "thinking",
+       "text": "Look up the down hosts.",
+       "_link": "4",
+       "_cell": "server|4",
+       "_id": "server|4",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 1,
+       "lane": "server",
+       "seq": 5,
+       "event": "5",
+       "kind": "answer",
+       "text": "web01 and db02.",
+       "_link": "5",
+       "_cell": "server|5",
+       "_id": "server|5",
+       "_dup": false,
+       "_lost": false,
+       "_burst": false
+      }
+     ]
+    },
+    {
+     "type": "view",
+     "id": "v-read",
+     "layout": "decision",
+     "caption": "Which answer does read() pick?",
+     "data": "reconnect",
+     "where": {
+      "version": "new"
+     },
+     "encode": {},
+     "depth": "short",
+     "inputs": {
+      "from": "v-scrub"
+     },
+     "presets": [],
+     "tasks": [
+      {
+       "text": "Make read() answer 409.",
+       "when": {
+        "node": "409",
+        "_taken": true
+       }
+      }
+     ],
+     "marks": [],
+     "layers": [],
+     "notes": [],
+     "nodes": [
+      {
+       "id": "beyond",
+       "label": "cursor > end?",
+       "kind": "check",
+       "code": {
+        "language": "python",
+        "text": "    if cursor > end:",
+        "file": "src/stream.py",
+        "start_line": 32
+       },
+       "lines": [
+        32,
+        32
+       ],
+       "note": "This is checked first, running or not.",
+       "yes": [
+        33,
+        33
+       ],
+       "verified": "unchecked"
+      },
+      {
+       "id": "409",
+       "label": "409 Conflict",
+       "kind": "outcome",
+       "code": {
+        "language": "python",
+        "text": "        raise Beyond(cursor)",
+        "file": "src/stream.py",
+        "start_line": 33
+       },
+       "lines": [
+        33,
+        33
+       ],
+       "note": "Beyond maps to 409.",
+       "tone": "bad",
+       "example": {
+        "version": "new",
+        "drop": 2,
+        "lid": 4,
+        "running": 1
+       },
+       "verified": "unchecked"
+      },
+      {
+       "id": "follow",
+       "label": "follow",
+       "kind": "outcome",
+       "code": {
+        "language": "python",
+        "text": "        return _follow(log, cursor)",
+        "file": "src/stream.py",
+        "start_line": 37
+       },
+       "lines": [
+        37,
+        37
+       ],
+       "note": "A running turn follows the log.",
+       "verified": "unchecked"
+      },
+      {
+       "id": "replay",
+       "label": "replay",
+       "kind": "outcome",
+       "code": {
+        "language": "python",
+        "text": "    return _replay(log, cursor)",
+        "file": "src/stream.py",
+        "start_line": 38
+       },
+       "lines": [
+        38,
+        38
+       ],
+       "note": "A finished turn replays from the cursor.",
+       "tone": "ok",
+       "verified": "unchecked"
+      }
+     ],
+     "fill": [],
+     "choices": {},
+     "claims": [],
+     "steps": [],
+     "items": [
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "node": "beyond",
+       "kind": "check",
+       "label": "cursor > end?",
+       "answer": "no",
+       "_taken": true,
+       "_link": "beyond",
+       "_cell": "beyond",
+       "_id": "beyond"
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "node": "409",
+       "kind": "outcome",
+       "label": "409 Conflict",
+       "answer": null,
+       "_taken": false,
+       "_link": "409",
+       "_cell": "409",
+       "_id": "409"
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "node": "follow",
+       "kind": "outcome",
+       "label": "follow",
+       "answer": null,
+       "_taken": false,
+       "_link": "follow",
+       "_cell": "follow",
+       "_id": "follow"
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 0,
+       "node": "replay",
+       "kind": "outcome",
+       "label": "replay",
+       "answer": null,
+       "_taken": true,
+       "_link": "replay",
+       "_cell": "replay",
+       "_id": "replay"
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 1,
+       "node": "beyond",
+       "kind": "check",
+       "label": "cursor > end?",
+       "answer": "no",
+       "_taken": true,
+       "_link": "beyond",
+       "_cell": "beyond",
+       "_id": "beyond"
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 1,
+       "node": "409",
+       "kind": "outcome",
+       "label": "409 Conflict",
+       "answer": null,
+       "_taken": false,
+       "_link": "409",
+       "_cell": "409",
+       "_id": "409"
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 1,
+       "node": "follow",
+       "kind": "outcome",
+       "label": "follow",
+       "answer": null,
+       "_taken": true,
+       "_link": "follow",
+       "_cell": "follow",
+       "_id": "follow"
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 2,
+       "running": 1,
+       "node": "replay",
+       "kind": "outcome",
+       "label": "replay",
+       "answer": null,
+       "_taken": true,
+       "_link": "replay",
+       "_cell": "replay",
+       "_id": "replay"
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 0,
+       "node": "beyond",
+       "kind": "check",
+       "label": "cursor > end?",
+       "answer": "no",
+       "_taken": true,
+       "_link": "beyond",
+       "_cell": "beyond",
+       "_id": "beyond"
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 0,
+       "node": "409",
+       "kind": "outcome",
+       "label": "409 Conflict",
+       "answer": null,
+       "_taken": false,
+       "_link": "409",
+       "_cell": "409",
+       "_id": "409"
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 0,
+       "node": "follow",
+       "kind": "outcome",
+       "label": "follow",
+       "answer": null,
+       "_taken": false,
+       "_link": "follow",
+       "_cell": "follow",
+       "_id": "follow"
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 0,
+       "node": "replay",
+       "kind": "outcome",
+       "label": "replay",
+       "answer": null,
+       "_taken": true,
+       "_link": "replay",
+       "_cell": "replay",
+       "_id": "replay"
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 1,
+       "node": "beyond",
+       "kind": "check",
+       "label": "cursor > end?",
+       "answer": "no",
+       "_taken": true,
+       "_link": "beyond",
+       "_cell": "beyond",
+       "_id": "beyond"
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 1,
+       "node": "409",
+       "kind": "outcome",
+       "label": "409 Conflict",
+       "answer": null,
+       "_taken": false,
+       "_link": "409",
+       "_cell": "409",
+       "_id": "409"
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 1,
+       "node": "follow",
+       "kind": "outcome",
+       "label": "follow",
+       "answer": null,
+       "_taken": true,
+       "_link": "follow",
+       "_cell": "follow",
+       "_id": "follow"
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 3,
+       "running": 1,
+       "node": "replay",
+       "kind": "outcome",
+       "label": "replay",
+       "answer": null,
+       "_taken": true,
+       "_link": "replay",
+       "_cell": "replay",
+       "_id": "replay"
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "node": "beyond",
+       "kind": "check",
+       "label": "cursor > end?",
+       "answer": "no",
+       "_taken": true,
+       "_link": "beyond",
+       "_cell": "beyond",
+       "_id": "beyond"
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "node": "409",
+       "kind": "outcome",
+       "label": "409 Conflict",
+       "answer": null,
+       "_taken": false,
+       "_link": "409",
+       "_cell": "409",
+       "_id": "409"
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "node": "follow",
+       "kind": "outcome",
+       "label": "follow",
+       "answer": null,
+       "_taken": false,
+       "_link": "follow",
+       "_cell": "follow",
+       "_id": "follow"
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 0,
+       "node": "replay",
+       "kind": "outcome",
+       "label": "replay",
+       "answer": null,
+       "_taken": true,
+       "_link": "replay",
+       "_cell": "replay",
+       "_id": "replay"
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 1,
+       "node": "beyond",
+       "kind": "check",
+       "label": "cursor > end?",
+       "answer": "yes",
+       "_taken": true,
+       "_link": "beyond",
+       "_cell": "beyond",
+       "_id": "beyond"
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 1,
+       "node": "409",
+       "kind": "outcome",
+       "label": "409 Conflict",
+       "answer": null,
+       "_taken": true,
+       "_link": "409",
+       "_cell": "409",
+       "_id": "409"
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 1,
+       "node": "follow",
+       "kind": "outcome",
+       "label": "follow",
+       "answer": null,
+       "_taken": false,
+       "_link": "follow",
+       "_cell": "follow",
+       "_id": "follow"
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 1,
+       "node": "replay",
+       "kind": "outcome",
+       "label": "replay",
+       "answer": null,
+       "_taken": true,
+       "_link": "replay",
+       "_cell": "replay",
+       "_id": "replay"
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 0,
+       "node": "beyond",
+       "kind": "check",
+       "label": "cursor > end?",
+       "answer": "no",
+       "_taken": true,
+       "_link": "beyond",
+       "_cell": "beyond",
+       "_id": "beyond"
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 0,
+       "node": "409",
+       "kind": "outcome",
+       "label": "409 Conflict",
+       "answer": null,
+       "_taken": false,
+       "_link": "409",
+       "_cell": "409",
+       "_id": "409"
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 0,
+       "node": "follow",
+       "kind": "outcome",
+       "label": "follow",
+       "answer": null,
+       "_taken": false,
+       "_link": "follow",
+       "_cell": "follow",
+       "_id": "follow"
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 0,
+       "node": "replay",
+       "kind": "outcome",
+       "label": "replay",
+       "answer": null,
+       "_taken": true,
+       "_link": "replay",
+       "_cell": "replay",
+       "_id": "replay"
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 1,
+       "node": "beyond",
+       "kind": "check",
+       "label": "cursor > end?",
+       "answer": "no",
+       "_taken": true,
+       "_link": "beyond",
+       "_cell": "beyond",
+       "_id": "beyond"
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 1,
+       "node": "409",
+       "kind": "outcome",
+       "label": "409 Conflict",
+       "answer": null,
+       "_taken": false,
+       "_link": "409",
+       "_cell": "409",
+       "_id": "409"
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 1,
+       "node": "follow",
+       "kind": "outcome",
+       "label": "follow",
+       "answer": null,
+       "_taken": true,
+       "_link": "follow",
+       "_cell": "follow",
+       "_id": "follow"
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 2,
+       "running": 1,
+       "node": "replay",
+       "kind": "outcome",
+       "label": "replay",
+       "answer": null,
+       "_taken": true,
+       "_link": "replay",
+       "_cell": "replay",
+       "_id": "replay"
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 0,
+       "node": "beyond",
+       "kind": "check",
+       "label": "cursor > end?",
+       "answer": "no",
+       "_taken": true,
+       "_link": "beyond",
+       "_cell": "beyond",
+       "_id": "beyond"
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 0,
+       "node": "409",
+       "kind": "outcome",
+       "label": "409 Conflict",
+       "answer": null,
+       "_taken": false,
+       "_link": "409",
+       "_cell": "409",
+       "_id": "409"
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 0,
+       "node": "follow",
+       "kind": "outcome",
+       "label": "follow",
+       "answer": null,
+       "_taken": false,
+       "_link": "follow",
+       "_cell": "follow",
+       "_id": "follow"
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 0,
+       "node": "replay",
+       "kind": "outcome",
+       "label": "replay",
+       "answer": null,
+       "_taken": true,
+       "_link": "replay",
+       "_cell": "replay",
+       "_id": "replay"
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 1,
+       "node": "beyond",
+       "kind": "check",
+       "label": "cursor > end?",
+       "answer": "no",
+       "_taken": true,
+       "_link": "beyond",
+       "_cell": "beyond",
+       "_id": "beyond"
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 1,
+       "node": "409",
+       "kind": "outcome",
+       "label": "409 Conflict",
+       "answer": null,
+       "_taken": false,
+       "_link": "409",
+       "_cell": "409",
+       "_id": "409"
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 1,
+       "node": "follow",
+       "kind": "outcome",
+       "label": "follow",
+       "answer": null,
+       "_taken": true,
+       "_link": "follow",
+       "_cell": "follow",
+       "_id": "follow"
+      },
+      {
+       "version": "new",
+       "drop": 3,
+       "lid": 3,
+       "running": 1,
+       "node": "replay",
+       "kind": "outcome",
+       "label": "replay",
+       "answer": null,
+       "_taken": true,
+       "_link": "replay",
+       "_cell": "replay",
+       "_id": "replay"
+      }
+     ]
+    }
+   ],
+   "checkpoints": [
+    {
+     "id": "cp-branch",
+     "prompt": "The turn is running and the cursor is 4 with 3 events stored. Which branch runs?",
+     "options": [
+      {
+       "text": "It follows the log."
+      },
+      {
+       "text": "It raises Beyond."
+      },
+      {
+       "text": "It replays the log."
+      }
+     ],
+     "type": "single_choice"
+    }
+   ]
+  },
+  {
+   "id": "tasks",
+   "title": "Branches and task switches",
+   "body": "Predict the branches one run takes. Then step through two producer tasks that share the event loop.",
+   "elements": [
+    {
+     "type": "view",
+     "id": "v-read2",
+     "layout": "decision",
+     "caption": "Which nodes does this reconnect reach?",
+     "data": "reconnect",
+     "where": {
+      "version": "new",
+      "drop": 2,
+      "lid": 4,
+      "running": 1
+     },
+     "encode": {},
+     "gate": "cp-taken",
+     "depth": "short",
+     "inputs": [],
+     "presets": [],
+     "tasks": [],
+     "marks": [],
+     "layers": [],
+     "notes": [],
+     "nodes": [
+      {
+       "id": "beyond",
+       "label": "cursor > end?",
+       "kind": "check",
+       "code": {
+        "language": "python",
+        "text": "    if cursor > end:",
+        "file": "src/stream.py",
+        "start_line": 32
+       },
+       "lines": [
+        32,
+        32
+       ],
+       "note": "This is checked first, running or not.",
+       "yes": [
+        33,
+        33
+       ],
+       "verified": "unchecked"
+      },
+      {
+       "id": "409",
+       "label": "409 Conflict",
+       "kind": "outcome",
+       "code": {
+        "language": "python",
+        "text": "        raise Beyond(cursor)",
+        "file": "src/stream.py",
+        "start_line": 33
+       },
+       "lines": [
+        33,
+        33
+       ],
+       "note": "Beyond maps to 409.",
+       "tone": "bad",
+       "verified": "unchecked"
+      },
+      {
+       "id": "follow",
+       "label": "follow",
+       "kind": "outcome",
+       "code": {
+        "language": "python",
+        "text": "        return _follow(log, cursor)",
+        "file": "src/stream.py",
+        "start_line": 37
+       },
+       "lines": [
+        37,
+        37
+       ],
+       "note": "A running turn follows the log.",
+       "verified": "unchecked"
+      },
+      {
+       "id": "replay",
+       "label": "replay",
+       "kind": "outcome",
+       "code": {
+        "language": "python",
+        "text": "    return _replay(log, cursor)",
+        "file": "src/stream.py",
+        "start_line": 38
+       },
+       "lines": [
+        38,
+        38
+       ],
+       "note": "A finished turn replays from the cursor.",
+       "tone": "ok",
+       "verified": "unchecked"
+      }
+     ],
+     "fill": [],
+     "choices": {},
+     "claims": [],
+     "steps": [],
+     "items": [
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 1,
+       "node": "beyond",
+       "kind": "check",
+       "label": "cursor > end?",
+       "_link": "beyond",
+       "_cell": "beyond",
+       "_id": "beyond",
+       "_masked": true
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 1,
+       "node": "409",
+       "kind": "outcome",
+       "label": "409 Conflict",
+       "_link": "409",
+       "_cell": "409",
+       "_id": "409",
+       "_masked": true
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 1,
+       "node": "follow",
+       "kind": "outcome",
+       "label": "follow",
+       "_link": "follow",
+       "_cell": "follow",
+       "_id": "follow",
+       "_masked": true
+      },
+      {
+       "version": "new",
+       "drop": 2,
+       "lid": 4,
+       "running": 1,
+       "node": "replay",
+       "kind": "outcome",
+       "label": "replay",
+       "_link": "replay",
+       "_cell": "replay",
+       "_id": "replay",
+       "_masked": true
+      }
+     ]
+    },
+    {
+     "type": "view",
+     "id": "v-prod",
+     "layout": "steps",
+     "caption": "How do tasks A and B take turns?",
+     "data": "producer",
+     "where": {
+      "event": "line",
+      "seq": {
+       "gte": 12,
+       "lte": 31
+      }
+     },
+     "encode": {
+      "file": "file",
+      "line": "line",
+      "key": "seq",
+      "show": [
+       "l_items"
+      ]
+     },
+     "depth": "short",
+     "inputs": [],
+     "presets": [],
+     "tasks": [],
+     "marks": [],
+     "layers": [],
+     "notes": [],
+     "nodes": [],
+     "fill": [],
+     "choices": {},
+     "claims": [],
+     "steps": [
+      {
+       "code": {
+        "file": "src/producer.py",
+        "language": "python",
+        "spans": [
+         {
+          "start_line": 3,
+          "text": "\nasync def produce(items: list[int]) -> int:\n    await asyncio.sleep(0)\n    items.append(1)\n    await asyncio.sleep(0)"
+         }
+        ]
+       },
+       "note": "",
+       "link": [
+        "13"
+       ],
+       "show": {
+        "l_items": "[]"
+       },
+       "line": 5,
+       "verified": "unchecked"
+      },
+      {
+       "code": {
+        "file": "src/producer.py",
+        "language": "python",
+        "spans": [
+         {
+          "start_line": 3,
+          "text": "\nasync def produce(items: list[int]) -> int:\n    await asyncio.sleep(0)\n    items.append(1)\n    await asyncio.sleep(0)"
+         }
+        ]
+       },
+       "note": "",
+       "link": [
+        "16"
+       ],
+       "show": {
+        "l_items": "[]"
+       },
+       "line": 5,
+       "verified": "unchecked"
+      },
+      {
+       "code": {
+        "file": "src/producer.py",
+        "language": "python",
+        "spans": [
+         {
+          "start_line": 4,
+          "text": "async def produce(items: list[int]) -> int:\n    await asyncio.sleep(0)\n    items.append(1)\n    await asyncio.sleep(0)\n    items.append(2)"
+         }
+        ]
+       },
+       "note": "",
+       "link": [
+        "19"
+       ],
+       "show": {
+        "l_items": "[]"
+       },
+       "line": 6,
+       "verified": "unchecked"
+      },
+      {
+       "code": {
+        "file": "src/producer.py",
+        "language": "python",
+        "spans": [
+         {
+          "start_line": 5,
+          "text": "    await asyncio.sleep(0)\n    items.append(1)\n    await asyncio.sleep(0)\n    items.append(2)\n    return len(items)"
+         }
+        ]
+       },
+       "note": "",
+       "link": [
+        "20"
+       ],
+       "show": {
+        "l_items": "[1]"
+       },
+       "line": 7,
+       "verified": "unchecked"
+      },
+      {
+       "code": {
+        "file": "src/producer.py",
+        "language": "python",
+        "spans": [
+         {
+          "start_line": 4,
+          "text": "async def produce(items: list[int]) -> int:\n    await asyncio.sleep(0)\n    items.append(1)\n    await asyncio.sleep(0)\n    items.append(2)"
+         }
+        ]
+       },
+       "note": "",
+       "link": [
+        "23"
+       ],
+       "show": {
+        "l_items": "[]"
+       },
+       "line": 6,
+       "verified": "unchecked"
+      },
+      {
+       "code": {
+        "file": "src/producer.py",
+        "language": "python",
+        "spans": [
+         {
+          "start_line": 5,
+          "text": "    await asyncio.sleep(0)\n    items.append(1)\n    await asyncio.sleep(0)\n    items.append(2)\n    return len(items)"
+         }
+        ]
+       },
+       "note": "",
+       "link": [
+        "24"
+       ],
+       "show": {
+        "l_items": "[1]"
+       },
+       "line": 7,
+       "verified": "unchecked"
+      },
+      {
+       "code": {
+        "file": "src/producer.py",
+        "language": "python",
+        "spans": [
+         {
+          "start_line": 6,
+          "text": "    items.append(1)\n    await asyncio.sleep(0)\n    items.append(2)\n    return len(items)\n"
+         }
+        ]
+       },
+       "note": "",
+       "link": [
+        "27"
+       ],
+       "show": {
+        "l_items": "[1]"
+       },
+       "line": 8,
+       "verified": "unchecked"
+      },
+      {
+       "code": {
+        "file": "src/producer.py",
+        "language": "python",
+        "spans": [
+         {
+          "start_line": 7,
+          "text": "    await asyncio.sleep(0)\n    items.append(2)\n    return len(items)\n\n"
+         }
+        ]
+       },
+       "note": "",
+       "link": [
+        "28"
+       ],
+       "show": {
+        "l_items": "[1, 2]"
+       },
+       "line": 9,
+       "verified": "unchecked"
+      },
+      {
+       "code": {
+        "file": "src/producer.py",
+        "language": "python",
+        "spans": [
+         {
+          "start_line": 6,
+          "text": "    items.append(1)\n    await asyncio.sleep(0)\n    items.append(2)\n    return len(items)\n"
+         }
+        ]
+       },
+       "note": "",
+       "link": [
+        "30"
+       ],
+       "show": {
+        "l_items": "[1]"
+       },
+       "line": 8,
+       "verified": "unchecked"
+      },
+      {
+       "code": {
+        "file": "src/producer.py",
+        "language": "python",
+        "spans": [
+         {
+          "start_line": 7,
+          "text": "    await asyncio.sleep(0)\n    items.append(2)\n    return len(items)\n\n"
+         }
+        ]
+       },
+       "note": "",
+       "link": [
+        "31"
+       ],
+       "show": {
+        "l_items": "[1, 2]"
+       },
+       "line": 9,
+       "verified": "unchecked"
+      }
+     ],
+     "items": [
+      {
+       "seq": 13,
+       "event": "line",
+       "task": null,
+       "file": "src/producer.py",
+       "line": 5,
+       "l_a": null,
+       "l_b": null,
+       "l_items": "[]",
+       "_link": "13",
+       "_cell": "13",
+       "_id": "13"
+      },
+      {
+       "seq": 16,
+       "event": "line",
+       "task": null,
+       "file": "src/producer.py",
+       "line": 5,
+       "l_a": null,
+       "l_b": null,
+       "l_items": "[]",
+       "_link": "16",
+       "_cell": "16",
+       "_id": "16"
+      },
+      {
+       "seq": 19,
+       "event": "line",
+       "task": null,
+       "file": "src/producer.py",
+       "line": 6,
+       "l_a": null,
+       "l_b": null,
+       "l_items": "[]",
+       "_link": "19",
+       "_cell": "19",
+       "_id": "19"
+      },
+      {
+       "seq": 20,
+       "event": "line",
+       "task": null,
+       "file": "src/producer.py",
+       "line": 7,
+       "l_a": null,
+       "l_b": null,
+       "l_items": "[1]",
+       "_link": "20",
+       "_cell": "20",
+       "_id": "20"
+      },
+      {
+       "seq": 23,
+       "event": "line",
+       "task": null,
+       "file": "src/producer.py",
+       "line": 6,
+       "l_a": null,
+       "l_b": null,
+       "l_items": "[]",
+       "_link": "23",
+       "_cell": "23",
+       "_id": "23"
+      },
+      {
+       "seq": 24,
+       "event": "line",
+       "task": null,
+       "file": "src/producer.py",
+       "line": 7,
+       "l_a": null,
+       "l_b": null,
+       "l_items": "[1]",
+       "_link": "24",
+       "_cell": "24",
+       "_id": "24"
+      },
+      {
+       "seq": 27,
+       "event": "line",
+       "task": null,
+       "file": "src/producer.py",
+       "line": 8,
+       "l_a": null,
+       "l_b": null,
+       "l_items": "[1]",
+       "_link": "27",
+       "_cell": "27",
+       "_id": "27"
+      },
+      {
+       "seq": 28,
+       "event": "line",
+       "task": null,
+       "file": "src/producer.py",
+       "line": 9,
+       "l_a": null,
+       "l_b": null,
+       "l_items": "[1, 2]",
+       "_link": "28",
+       "_cell": "28",
+       "_id": "28"
+      },
+      {
+       "seq": 30,
+       "event": "line",
+       "task": null,
+       "file": "src/producer.py",
+       "line": 8,
+       "l_a": null,
+       "l_b": null,
+       "l_items": "[1]",
+       "_link": "30",
+       "_cell": "30",
+       "_id": "30"
+      },
+      {
+       "seq": 31,
+       "event": "line",
+       "task": null,
+       "file": "src/producer.py",
+       "line": 9,
+       "l_a": null,
+       "l_b": null,
+       "l_items": "[1, 2]",
+       "_link": "31",
+       "_cell": "31",
+       "_id": "31"
+      }
+     ]
+    }
+   ],
+   "checkpoints": [
+    {
+     "id": "cp-taken",
+     "prompt": "The browser reconnects with cursor 4 while turn 2 runs. Click the nodes this run reaches.",
+     "view": "v-read2",
+     "candidates": [
+      "beyond",
+      "409",
+      "follow",
+      "replay"
+     ],
+     "type": "select_items"
+    },
+    {
+     "id": "cp-step",
+     "prompt": "Task A has appended its first item. What does `items` hold now?",
+     "view": "v-prod",
+     "step": 3,
+     "options": [
+      {
+       "text": "`[1, 1]`"
+      },
+      {
+       "text": "`[]`"
+      },
+      {
+       "text": "`[1]`"
+      }
+     ],
+     "type": "predict_state"
+    }
+   ]
+  }
+ ],
+ "final": [
+  {
+   "id": "f-transfer",
+   "prompt": "The browser drops after frame 3 and sends Last-Event-ID 4. Click the frames it never gets.",
+   "frame": {
+    "type": "view",
+    "layout": "lanes",
+    "caption": "Drop after frame 3, cursor 4",
+    "data": "reconnect",
+    "where": {
+     "version": "new",
+     "drop": 3,
+     "lid": 4,
+     "running": 0
+    },
+    "encode": {
+     "lane": "lane",
+     "x": "seq",
+     "key": "event",
+     "label": "text",
+     "class": "kind",
+     "ref_lane": "server"
+    },
+    "mask": {
+     "lane": "client"
+    },
+    "depth": "short",
+    "inputs": [],
+    "presets": [],
+    "tasks": [],
+    "marks": [],
+    "layers": [],
+    "notes": [],
+    "nodes": [],
+    "fill": [],
+    "choices": {},
+    "claims": [],
+    "steps": [],
+    "items": [
+     {
+      "_cell": "client|1",
+      "_id": "client|1",
+      "_masked": true,
+      "lane": "client",
+      "seq": 1,
+      "version": "new",
+      "drop": 3,
+      "lid": 4,
+      "running": 0
+     },
+     {
+      "_cell": "client|2",
+      "_id": "client|2",
+      "_masked": true,
+      "lane": "client",
+      "seq": 2,
+      "version": "new",
+      "drop": 3,
+      "lid": 4,
+      "running": 0
+     },
+     {
+      "_cell": "client|3",
+      "_id": "client|3",
+      "_masked": true,
+      "lane": "client",
+      "seq": 3,
+      "version": "new",
+      "drop": 3,
+      "lid": 4,
+      "running": 0
+     },
+     {
+      "_cell": "client|4",
+      "_id": "client|4",
+      "_masked": true,
+      "lane": "client",
+      "seq": 4,
+      "version": "new",
+      "drop": 3,
+      "lid": 4,
+      "running": 0
+     },
+     {
+      "_cell": "client|5",
+      "_id": "client|5",
+      "_masked": true,
+      "lane": "client",
+      "seq": 5,
+      "version": "new",
+      "drop": 3,
+      "lid": 4,
+      "running": 0
+     },
+     {
+      "version": "new",
+      "drop": 3,
+      "lid": 4,
+      "running": 0,
+      "lane": "server",
+      "seq": 1,
+      "event": "1",
+      "kind": "prompt",
+      "text": "Which hosts are down?",
+      "_link": "1",
+      "_cell": "server|1",
+      "_id": "server|1",
+      "_dup": false,
+      "_lost": false,
+      "_burst": false
+     },
+     {
+      "version": "new",
+      "drop": 3,
+      "lid": 4,
+      "running": 0,
+      "lane": "server",
+      "seq": 2,
+      "event": "2",
+      "kind": "answer",
+      "text": "Two hosts are down.",
+      "_link": "2",
+      "_cell": "server|2",
+      "_id": "server|2",
+      "_dup": false,
+      "_lost": false,
+      "_burst": false
+     },
+     {
+      "version": "new",
+      "drop": 3,
+      "lid": 4,
+      "running": 0,
+      "lane": "server",
+      "seq": 3,
+      "event": "3",
+      "kind": "prompt",
+      "text": "Which ones?",
+      "_link": "3",
+      "_cell": "server|3",
+      "_id": "server|3",
+      "_dup": false,
+      "_lost": false,
+      "_burst": false
+     },
+     {
+      "version": "new",
+      "drop": 3,
+      "lid": 4,
+      "running": 0,
+      "lane": "server",
+      "seq": 4,
+      "event": "4",
+      "kind": "thinking",
+      "text": "Look up the down hosts.",
+      "_link": "4",
+      "_cell": "server|4",
+      "_id": "server|4",
+      "_dup": false,
+      "_lost": false,
+      "_burst": false
+     },
+     {
+      "version": "new",
+      "drop": 3,
+      "lid": 4,
+      "running": 0,
+      "lane": "server",
+      "seq": 5,
+      "event": "5",
+      "kind": "answer",
+      "text": "web01 and db02.",
+      "_link": "5",
+      "_cell": "server|5",
+      "_id": "server|5",
+      "_dup": false,
+      "_lost": false,
+      "_burst": false
+     }
+    ]
+   },
+   "candidates": [
+    "client|1",
+    "client|2",
+    "client|3",
+    "client|4",
+    "client|5"
+   ],
+   "type": "select_items"
+  },
+  {
+   "id": "f-wrong",
+   "prompt": "One item is wrong. Which?",
+   "frame": {
+    "type": "view",
+    "layout": "lanes",
+    "caption": "A copy of one recorded reconnect",
+    "data": "reconnect-wrong",
+    "where": {
+     "version": "new",
+     "drop": 2,
+     "lid": 2,
+     "running": 0
+    },
+    "encode": {
+     "lane": "lane",
+     "x": "seq",
+     "key": "event",
+     "label": "text",
+     "class": "kind",
+     "ref_lane": "server"
+    },
+    "depth": "short",
+    "inputs": [],
+    "presets": [],
+    "tasks": [],
+    "marks": [],
+    "layers": [],
+    "notes": [],
+    "nodes": [],
+    "fill": [],
+    "choices": {},
+    "claims": [],
+    "steps": [],
+    "items": [
+     {
+      "version": "new",
+      "drop": 2,
+      "lid": 2,
+      "running": 0,
+      "lane": "client",
+      "seq": 1,
+      "event": "1",
+      "kind": "prompt",
+      "text": "Which hosts are down?",
+      "_link": "1",
+      "_cell": "client|1",
+      "_id": "client|1",
+      "_dup": false,
+      "_lost": false,
+      "_burst": false
+     },
+     {
+      "version": "new",
+      "drop": 2,
+      "lid": 2,
+      "running": 0,
+      "lane": "client",
+      "seq": 2,
+      "event": "2",
+      "kind": "answer",
+      "text": "Two hosts are down.",
+      "_link": "2",
+      "_cell": "client|2",
+      "_id": "client|2",
+      "_dup": false,
+      "_lost": false,
+      "_burst": false
+     },
+     {
+      "version": "new",
+      "drop": 2,
+      "lid": 2,
+      "running": 0,
+      "lane": "client",
+      "seq": 3,
+      "event": "4",
+      "kind": "prompt",
+      "text": "Which ones?",
+      "_link": "4",
+      "_cell": "client|4",
+      "_id": "client|4",
+      "_dup": false,
+      "_lost": false,
+      "_burst": true
+     },
+     {
+      "version": "new",
+      "drop": 2,
+      "lid": 2,
+      "running": 0,
+      "lane": "client",
+      "seq": 3,
+      "event": "3",
+      "kind": "prompt",
+      "text": "Which ones?",
+      "_link": "3",
+      "_cell": "client|3",
+      "_id": "client|3",
+      "_dup": false,
+      "_lost": true,
+      "_burst": true
+     },
+     {
+      "version": "new",
+      "drop": 2,
+      "lid": 2,
+      "running": 0,
+      "lane": "client",
+      "seq": 4,
+      "event": "4",
+      "kind": "thinking",
+      "text": "Look up the down hosts.",
+      "_link": "4",
+      "_cell": "client|4",
+      "_id": "client|4#2",
+      "_dup": true,
+      "_lost": false,
+      "_burst": false
+     },
+     {
+      "version": "new",
+      "drop": 2,
+      "lid": 2,
+      "running": 0,
+      "lane": "client",
+      "seq": 5,
+      "event": "5",
+      "kind": "answer",
+      "text": "web01 and db02.",
+      "_link": "5",
+      "_cell": "client|5",
+      "_id": "client|5",
+      "_dup": false,
+      "_lost": false,
+      "_burst": false
+     },
+     {
+      "version": "new",
+      "drop": 2,
+      "lid": 2,
+      "running": 0,
+      "lane": "server",
+      "seq": 1,
+      "event": "1",
+      "kind": "prompt",
+      "text": "Which hosts are down?",
+      "_link": "1",
+      "_cell": "server|1",
+      "_id": "server|1",
+      "_dup": false,
+      "_lost": false,
+      "_burst": false
+     },
+     {
+      "version": "new",
+      "drop": 2,
+      "lid": 2,
+      "running": 0,
+      "lane": "server",
+      "seq": 2,
+      "event": "2",
+      "kind": "answer",
+      "text": "Two hosts are down.",
+      "_link": "2",
+      "_cell": "server|2",
+      "_id": "server|2",
+      "_dup": false,
+      "_lost": false,
+      "_burst": false
+     },
+     {
+      "version": "new",
+      "drop": 2,
+      "lid": 2,
+      "running": 0,
+      "lane": "server",
+      "seq": 3,
+      "event": "3",
+      "kind": "prompt",
+      "text": "Which ones?",
+      "_link": "3",
+      "_cell": "server|3",
+      "_id": "server|3",
+      "_dup": false,
+      "_lost": false,
+      "_burst": false
+     },
+     {
+      "version": "new",
+      "drop": 2,
+      "lid": 2,
+      "running": 0,
+      "lane": "server",
+      "seq": 4,
+      "event": "4",
+      "kind": "thinking",
+      "text": "Look up the down hosts.",
+      "_link": "4",
+      "_cell": "server|4",
+      "_id": "server|4",
+      "_dup": false,
+      "_lost": false,
+      "_burst": false
+     },
+     {
+      "version": "new",
+      "drop": 2,
+      "lid": 2,
+      "running": 0,
+      "lane": "server",
+      "seq": 5,
+      "event": "5",
+      "kind": "answer",
+      "text": "web01 and db02.",
+      "_link": "5",
+      "_cell": "server|5",
+      "_id": "server|5",
+      "_dup": false,
+      "_lost": false,
+      "_burst": false
+     }
+    ]
+   },
+   "candidates": [
+    "client|1",
+    "client|2",
+    "client|4",
+    "client|3",
+    "client|5",
+    "server|1",
+    "server|2",
+    "server|3",
+    "server|4",
+    "server|5"
+   ],
+   "type": "select_items"
+  },
+  {
+   "id": "f-kinds",
+   "prompt": "The turn is running. Fill in the kind of each stored event.",
+   "frame": {
+    "type": "view",
+    "layout": "table",
+    "caption": "Stored events while turn 2 runs",
+    "data": "reconnect",
+    "where": {
+     "version": "new",
+     "drop": 3,
+     "lid": 4,
+     "running": 1,
+     "lane": "server"
+    },
+    "encode": {
+     "columns": [
+      {
+       "field": "seq",
+       "label": "frame"
+      },
+      {
+       "field": "kind",
+       "label": "kind"
+      }
+     ],
+     "key": "seq"
+    },
+    "depth": "short",
+    "inputs": [],
+    "presets": [],
+    "tasks": [],
+    "marks": [],
+    "layers": [],
+    "notes": [],
+    "nodes": [],
+    "fill": [
+     "kind"
+    ],
+    "choices": {
+     "kind": [
+      "answer",
+      "error",
+      "prompt",
+      "thinking"
+     ]
+    },
+    "claims": [],
+    "steps": [],
+    "items": [
+     {
+      "version": "new",
+      "drop": 3,
+      "lid": 4,
+      "running": 1,
+      "lane": "server",
+      "seq": 1,
+      "event": "1",
+      "kind": null,
+      "text": "Which hosts are down?",
+      "_link": "1",
+      "_cell": "1",
+      "_id": "1",
+      "_masked": true
+     },
+     {
+      "version": "new",
+      "drop": 3,
+      "lid": 4,
+      "running": 1,
+      "lane": "server",
+      "seq": 2,
+      "event": "2",
+      "kind": null,
+      "text": "Two hosts are down.",
+      "_link": "2",
+      "_cell": "2",
+      "_id": "2",
+      "_masked": true
+     },
+     {
+      "version": "new",
+      "drop": 3,
+      "lid": 4,
+      "running": 1,
+      "lane": "server",
+      "seq": 3,
+      "event": "3",
+      "kind": null,
+      "text": "Which ones?",
+      "_link": "3",
+      "_cell": "3",
+      "_id": "3",
+      "_masked": true
+     }
+    ]
+   },
+   "blanks": [
+    {
+     "cell": "1",
+     "field": "kind"
+    },
+    {
+     "cell": "2",
+     "field": "kind"
+    },
+    {
+     "cell": "3",
+     "field": "kind"
+    }
+   ],
+   "type": "fill_table"
+  },
+  {
+   "id": "f-order",
+   "prompt": "Why does the old reader send frames 1 and 2 twice after a reconnect?",
+   "options": [
+    {
+     "text": "It always replays from index 0."
+    },
+    {
+     "text": "The browser asks for them again."
+    },
+    {
+     "text": "The log stores them twice."
+    }
+   ],
+   "type": "single_choice"
+  }
+ ]
+}

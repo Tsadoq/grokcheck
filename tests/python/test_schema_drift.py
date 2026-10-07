@@ -18,9 +18,11 @@ SCHEMA = (
 LESSONS = sorted((FIXTURES / "lessons").glob("*.json"))
 
 # These fixtures break only rules a JSON Schema cannot state (unique ids, index
-# ranges, files on disk), so the schema must accept what the validator rejects.
+# ranges, files on disk, dataset rows), so the schema must accept what the
+# validator rejects.
 SEMANTIC_ONLY = frozenset(
     {"invalid_many_errors.json", "invalid_plan_media_not_used.json"}
+    | {lesson.name for lesson in LESSONS if lesson.name.startswith("invalid_view_")}
 )
 
 

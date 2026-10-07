@@ -51,7 +51,9 @@ from grokcheck.lesson import (
     MultipleChoice,
     OptionsElement,
     PredictOutput,
+    PredictState,
     SingleChoice,
+    ViewElement,
 )
 from grokcheck.mutate import ANSI_ESCAPE, LOG_TAIL_CHARS, MutationError
 from grokcheck.mutate import run_tests as run_test_command
@@ -161,6 +163,7 @@ class LessonRun:
         }
         self._commits: dict[str, str] = {}
         self._ratings: dict[str, list[Confidence]] = {}
+        self._elements = _element_names(lesson)
 
     @classmethod
     def create(cls, lesson: Lesson, project_root: Path) -> LessonRun:
@@ -232,6 +235,8 @@ class LessonRun:
             sections=(),
             final=final,
             seed=seed,
+            kinds=self.lesson.kinds,
+            datasets=self.lesson.datasets,
         )
 
     @property
@@ -507,16 +512,21 @@ class LessonRun:
             "title": self.lesson.title,
             "summary": dataclasses.asdict(summary),
             "final": [
-                _graded_item(self._finals[qid], grade) for qid, grade in finals.items()
+                self._graded_item(self._finals[qid], grade)
+                for qid, grade in finals.items()
             ],
             "checkpoints": [
-                _graded_item(self._checkpoints[g.question_id], g) for g in checkpoints
+                self._graded_item(self._checkpoints[g.question_id], g)
+                for g in checkpoints
             ],
             "probe": [
-                _graded_item(question, self._grades[qid])
+                self._graded_item(question, self._grades[qid])
                 for qid, question in self._probes.items()
                 if qid in self._grades
             ],
+            "by_element": _by_element(
+                [(self._elements.get(g.question_id), g) for g in checkpoints]
+            ),
             "questions": [
                 dataclasses.asdict(thread) for thread in self._threads.values()
             ],
@@ -536,6 +546,12 @@ class LessonRun:
                     self._assumptions[element_id].items, ratings, strict=True
                 )
             ],
+        }
+
+    def _graded_item(self, question: Question, graded: Grade) -> dict[str, object]:
+        return {
+            **_graded_item(question, graded),
+            "element": self._elements.get(question.id),
         }
 
     def _after(self, seq: int, timeout: float, types: frozenset[str]) -> list[Event]:
@@ -654,6 +670,48 @@ def _line_ask(diff: DiffElement, line: int) -> LineAsk | None:
     return next((ask for ask in diff.asks if ask.line == line), None)
 
 
+def _element_names(lesson: Lesson) -> dict[str, str]:
+    """Name the element each question is about: `view:<layout>`, `trace`, or a gate."""
+    names: dict[str, str] = {}
+    for section in lesson.sections:
+        views = {e.id: e for e in section.elements if isinstance(e, ViewElement)}
+        gates = {
+            gate: e.type_name
+            for e in section.elements
+            if isinstance(gate := getattr(e, "gate", None), str)
+        }
+        for question in section.checkpoints:
+            view = views.get(str(getattr(question, "view", None)))
+            if view is not None:
+                names[question.id] = f"view:{view.layout}"
+            elif isinstance(question, PredictState) and question.trace_id:
+                names[question.id] = "trace"
+            elif question.id in gates:
+                names[question.id] = gates[question.id]
+    for question in (*lesson.final, *lesson.probe):
+        frame = getattr(question, "frame", None)
+        if isinstance(frame, dict):
+            names[question.id] = f"view:{frame.get('layout')}"
+    return names
+
+
+def _by_element(
+    graded: Iterable[tuple[str | None, Grade]],
+) -> dict[str, dict[str, object]]:
+    """Count answers, correct answers and the mean score per element name."""
+    groups: dict[str, list[Grade]] = {}
+    for name, grade_ in graded:
+        groups.setdefault(str(name) if name else "null", []).append(grade_)
+    return {
+        name: {
+            "answered": len(grades),
+            "correct": sum(g.outcome == "correct" for g in grades),
+            "mean_score": sum(g.score for g in grades) / len(grades),
+        }
+        for name, grades in groups.items()
+    }
+
+
 def _graded_item(question: Question, graded: Grade) -> dict[str, object]:
     return {
         "question_id": question.id,
@@ -755,6 +813,9 @@ def _rebuild(hint: Any, value: Any) -> Any:  # noqa: ANN401
             return tuple(_rebuild(args[0], item) for item in value)
         return tuple(_rebuild(arg, item) for arg, item in zip(args, value, strict=True))
     if origin in {Union, UnionType} and value is not None:
+        present = [arg for arg in get_args(hint) if arg is not type(None)]
+        if len(present) == 1:
+            return _rebuild(present[0], value)
         members = [arg for arg in get_args(hint) if _is_dataclass_type(arg)]
         if members:
             member = next(

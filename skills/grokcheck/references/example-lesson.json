@@ -10,10 +10,18 @@
       "id": "purpose",
       "title": "What retry is for",
       "body": "`retry` wraps a call that can fail for a moment, such as a network request, and runs it again instead of failing the whole operation.\n\nIt only retries `TransientError`. Any other exception means the call is wrong, not unlucky, so it propagates at once.",
-      "code": {
-        "language": "python",
-        "text": "def retry(call, attempts=3, base_delay=0.5, sleep=time.sleep):\n    for attempt in range(attempts):\n        try:\n            return call()\n        except TransientError:\n            if attempt == attempts - 1:\n                raise\n            sleep(base_delay * 2 ** attempt)"
-      },
+      "elements": [
+        {
+          "type": "vocab",
+          "code": {"language": "python", "text": "def retry(call, attempts=3, base_delay=0.5, sleep=time.sleep):\n    for attempt in range(attempts):\n        try:\n            return call()\n        except TransientError:\n            if attempt == attempts - 1:\n                raise\n            sleep(base_delay * 2 ** attempt)"},
+          "min_opened": 2,
+          "terms": [
+            {"term": "TransientError", "owner": "ours", "definition": "The one error class that means try again.", "lines": [5]},
+            {"term": "attempts", "owner": "ours", "definition": "How many times `call` runs at most, the first run included.", "lines": [1, 2, 6]},
+            {"term": "sleep", "owner": "ours", "definition": "The wait function, `time.sleep` unless a caller passes another.", "lines": [1, 8]}
+          ]
+        }
+      ],
       "checkpoints": [
         {
           "id": "cp-which-errors",
@@ -44,6 +52,13 @@
       "id": "control-flow",
       "title": "The loop and the backoff",
       "body": "Each pass of the loop is one attempt. A successful `call()` returns straight out of the loop.\n\nA `TransientError` waits `base_delay * 2 ** attempt` seconds and tries again, so the waits double: 0.5, 1, 2, and so on. The last attempt does not wait. It re-raises the error for the caller.",
+      "elements": [
+        {
+          "type": "diagram",
+          "mermaid": "flowchart TD\n  begin([attempt n]) -->|runs| run[call]\n  run -->|returns| done([value to caller])\n  run -->|raises other error| out([propagates at once])\n  run -->|raises TransientError| last{last attempt?}\n  last -->|yes| reraise([re-raise to caller])\n  last -->|no| wait[sleep base_delay times 2 to the n]\n  wait -->|next n| begin",
+          "caption": "Only `TransientError` loops back, and only while attempts are left. Every other exit leaves the loop at once."
+        }
+      ],
       "checkpoints": [
         {
           "id": "cp-raise-line",

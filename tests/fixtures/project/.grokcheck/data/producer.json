@@ -1,0 +1,370 @@
+{
+ "format": 1,
+ "id": "producer",
+ "fields": {
+  "seq": "int",
+  "event": "str",
+  "task": "str",
+  "file": "str",
+  "line": "int",
+  "l_a": "str",
+  "l_b": "str",
+  "l_items": "str"
+ },
+ "rows": [
+  {
+   "seq": 0,
+   "event": "line",
+   "task": null,
+   "file": "src/producer.py",
+   "line": 1
+  },
+  {
+   "seq": 1,
+   "event": "line",
+   "task": null,
+   "file": "src/producer.py",
+   "line": 4
+  },
+  {
+   "seq": 2,
+   "event": "line",
+   "task": null,
+   "file": "src/producer.py",
+   "line": 12
+  },
+  {
+   "seq": 3,
+   "event": "line",
+   "task": null,
+   "file": "src/producer.py",
+   "line": 18
+  },
+  {
+   "seq": 4,
+   "event": "created",
+   "task": "Task-1",
+   "file": null,
+   "line": null
+  },
+  {
+   "seq": 5,
+   "event": "resume",
+   "task": "Task-1",
+   "file": "src/producer.py",
+   "line": 12
+  },
+  {
+   "seq": 6,
+   "event": "line",
+   "task": null,
+   "file": "src/producer.py",
+   "line": 13
+  },
+  {
+   "seq": 7,
+   "event": "created",
+   "task": "A",
+   "file": null,
+   "line": null
+  },
+  {
+   "seq": 8,
+   "event": "line",
+   "task": null,
+   "file": "src/producer.py",
+   "line": 14,
+   "l_a": "<Task pending...r._on_done()]>"
+  },
+  {
+   "seq": 9,
+   "event": "created",
+   "task": "B",
+   "file": null,
+   "line": null
+  },
+  {
+   "seq": 10,
+   "event": "line",
+   "task": null,
+   "file": "src/producer.py",
+   "line": 15,
+   "l_a": "<Task pending...r._on_done()]>",
+   "l_b": "<Task pending...r._on_done()]>"
+  },
+  {
+   "seq": 11,
+   "event": "suspend",
+   "task": "Task-1",
+   "file": "src/producer.py",
+   "line": 15
+  },
+  {
+   "seq": 12,
+   "event": "resume",
+   "task": "A",
+   "file": "src/producer.py",
+   "line": 4
+  },
+  {
+   "seq": 13,
+   "event": "line",
+   "task": null,
+   "file": "src/producer.py",
+   "line": 5,
+   "l_items": "[]"
+  },
+  {
+   "seq": 14,
+   "event": "suspend",
+   "task": "A",
+   "file": "src/producer.py",
+   "line": 5
+  },
+  {
+   "seq": 15,
+   "event": "resume",
+   "task": "B",
+   "file": "src/producer.py",
+   "line": 4
+  },
+  {
+   "seq": 16,
+   "event": "line",
+   "task": null,
+   "file": "src/producer.py",
+   "line": 5,
+   "l_items": "[]"
+  },
+  {
+   "seq": 17,
+   "event": "suspend",
+   "task": "B",
+   "file": "src/producer.py",
+   "line": 5
+  },
+  {
+   "seq": 18,
+   "event": "resume",
+   "task": "A",
+   "file": "src/producer.py",
+   "line": 5
+  },
+  {
+   "seq": 19,
+   "event": "line",
+   "task": null,
+   "file": "src/producer.py",
+   "line": 6,
+   "l_items": "[]"
+  },
+  {
+   "seq": 20,
+   "event": "line",
+   "task": null,
+   "file": "src/producer.py",
+   "line": 7,
+   "l_items": "[1]"
+  },
+  {
+   "seq": 21,
+   "event": "suspend",
+   "task": "A",
+   "file": "src/producer.py",
+   "line": 7
+  },
+  {
+   "seq": 22,
+   "event": "resume",
+   "task": "B",
+   "file": "src/producer.py",
+   "line": 5
+  },
+  {
+   "seq": 23,
+   "event": "line",
+   "task": null,
+   "file": "src/producer.py",
+   "line": 6,
+   "l_items": "[]"
+  },
+  {
+   "seq": 24,
+   "event": "line",
+   "task": null,
+   "file": "src/producer.py",
+   "line": 7,
+   "l_items": "[1]"
+  },
+  {
+   "seq": 25,
+   "event": "suspend",
+   "task": "B",
+   "file": "src/producer.py",
+   "line": 7
+  },
+  {
+   "seq": 26,
+   "event": "resume",
+   "task": "A",
+   "file": "src/producer.py",
+   "line": 7
+  },
+  {
+   "seq": 27,
+   "event": "line",
+   "task": null,
+   "file": "src/producer.py",
+   "line": 8,
+   "l_items": "[1]"
+  },
+  {
+   "seq": 28,
+   "event": "line",
+   "task": null,
+   "file": "src/producer.py",
+   "line": 9,
+   "l_items": "[1, 2]"
+  },
+  {
+   "seq": 29,
+   "event": "resume",
+   "task": "B",
+   "file": "src/producer.py",
+   "line": 7
+  },
+  {
+   "seq": 30,
+   "event": "line",
+   "task": null,
+   "file": "src/producer.py",
+   "line": 8,
+   "l_items": "[1]"
+  },
+  {
+   "seq": 31,
+   "event": "line",
+   "task": null,
+   "file": "src/producer.py",
+   "line": 9,
+   "l_items": "[1, 2]"
+  },
+  {
+   "seq": 32,
+   "event": "done",
+   "task": "A",
+   "file": null,
+   "line": null
+  },
+  {
+   "seq": 33,
+   "event": "done",
+   "task": "B",
+   "file": null,
+   "line": null
+  },
+  {
+   "seq": 34,
+   "event": "resume",
+   "task": "Task-1",
+   "file": "src/producer.py",
+   "line": 15
+  },
+  {
+   "seq": 35,
+   "event": "done",
+   "task": "Task-1",
+   "file": null,
+   "line": null
+  },
+  {
+   "seq": 36,
+   "event": "created",
+   "task": "Task-4",
+   "file": null,
+   "line": null
+  },
+  {
+   "seq": 37,
+   "event": "resume",
+   "task": "Task-4",
+   "file": null,
+   "line": 561
+  },
+  {
+   "seq": 38,
+   "event": "done",
+   "task": "Task-4",
+   "file": null,
+   "line": null
+  },
+  {
+   "seq": 39,
+   "event": "created",
+   "task": "Task-5",
+   "file": null,
+   "line": null
+  },
+  {
+   "seq": 40,
+   "event": "resume",
+   "task": "Task-5",
+   "file": null,
+   "line": 586
+  },
+  {
+   "seq": 41,
+   "event": "done",
+   "task": "Task-5",
+   "file": null,
+   "line": null
+  }
+ ],
+ "runs": [
+  {
+   "inputs": {},
+   "rows": [
+    0,
+    42
+   ],
+   "cited_lines": 12,
+   "lines_run": {
+    "src/producer.py": [
+     [
+      1,
+      1
+     ],
+     [
+      4,
+      9
+     ],
+     [
+      12,
+      15
+     ],
+     [
+      18,
+      18
+     ]
+    ]
+   }
+  }
+ ],
+ "source": {
+  "kind": "trace",
+  "trace": ".grokcheck/traces/producer.json",
+  "trace_sha256": "6a6d2c9ffa1b44f8c25fad0b7384c8c1df3268a9d8d147d34203b2bebdaa95bb",
+  "head": "cd5b5d1da15f8092cdd0ec108381db47d5ba0cc7",
+  "dirty": [
+   "src/producer.py"
+  ],
+  "cited": [
+   {
+    "file": "src/producer.py",
+    "sha256": "09066e603c5fcfbd5314b0f5efe5b69f9f2cdc2b890e8b9060cef30bea5c7916"
+   }
+  ],
+  "cited_lines_run": 12
+ },
+ "recorded_at": "2026-10-06T14:08:26Z"
+}

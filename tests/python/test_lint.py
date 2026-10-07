@@ -2,11 +2,26 @@
 
 import dataclasses
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-from grokcheck.lesson import Lesson, Section, load_lesson
-from grokcheck.lint import intro, item_flaws, prose
+from grokcheck.lesson import (
+    CodeBlock,
+    CodeElement,
+    DiagramElement,
+    Element,
+    Lesson,
+    Plan,
+    Section,
+    Subject,
+    Term,
+    VideoElement,
+    ViewElement,
+    VocabElement,
+    load_lesson,
+)
+from grokcheck.lint import intro, item_flaws, media, prose
 
 VALID_FULL = Path(__file__).parent.parent / "fixtures" / "lessons" / "valid_full.json"
 PROJECT = Path(__file__).parent.parent / "fixtures" / "project"
@@ -136,6 +151,22 @@ def test_prose_lint_flags_a_sentence_over_25_words(tmp_path: Path) -> None:
         pytest.fail(f"fixture lesson warns {fixture_warnings}")
 
 
+def test_a_closing_quote_after_punctuation_ends_a_sentence(tmp_path: Path) -> None:
+    """Quoted examples ending in `."`, `?"` or a typographic quote split there."""
+    base = _lesson(tmp_path, _CLEAN_FINAL)
+    body = (
+        'Met: "The cache drops the oldest key when it is full." '
+        "Unmet: \u201cIt removes keys whenever it wants to free some memory?\u201d "
+        'Also unmet: "It never drops anything at all, so it just grows!" '
+        "Each example stays short on its own."
+    )
+    section = dataclasses.replace(base.sections[0], body=body)
+    lesson = dataclasses.replace(base, sections=(section,))
+
+    if warnings := prose(lesson):
+        pytest.fail(f"quoted examples warn {warnings}")
+
+
 def test_prose_lint_flags_banned_words_case_insensitively(tmp_path: Path) -> None:
     """A banned word in a prompt and a banned phrase in an explanation each warn."""
     final = {
@@ -193,3 +224,300 @@ def test_intro_lint_requires_a_closing_action(tmp_path: Path) -> None:
         pytest.fail(f"declarative intro warns {rules}")
     if action_warnings := intro(lesson_action):
         pytest.fail(f"intro ending in an action warns {action_warnings}")
+
+
+_DIAGRAM = DiagramElement(mermaid="flowchart TD\n  a -->|to| b", caption="Flow.")
+_VOCAB = VocabElement(
+    code=None,
+    terms=(Term(term="capacity", owner="ours", definition="Most items kept."),),
+    min_opened=1,
+)
+
+
+def _plan(
+    subject: Subject,
+    content: tuple[str, ...],
+    rejected: tuple[str, ...],
+    rationale: str = "Fifteen minutes fits one section.",
+) -> Plan:
+    return Plan(
+        subject=subject,
+        time_budget=15,
+        content=content,
+        media=(),
+        rejected=rejected,
+        rationale=(rationale,),
+        default_depth="short",
+    )
+
+
+def _with(lesson: Lesson, *elements: Element, plan: Plan | None = None) -> Lesson:
+    section = dataclasses.replace(lesson.sections[0], elements=elements)
+    return dataclasses.replace(lesson, sections=(section,), plan=plan)
+
+
+def _rules(lesson: Lesson) -> list[tuple[str, str]]:
+    return [(w.rule, w.path) for w in media(lesson)]
+
+
+def test_media_lint_flags_a_section_showing_only_prose_and_code(
+    tmp_path: Path,
+) -> None:
+    """A section with only prose in its short view warns; a diagram there does not.
+
+    A diagram hidden in detail does not count, since the short view never shows it.
+    """
+    base = _lesson(tmp_path, _CLEAN_FINAL)
+    hidden = dataclasses.replace(_DIAGRAM, depth="detail")
+
+    if ("prose_only_section", "sections[0]") not in _rules(_with(base, hidden)):
+        pytest.fail(f"prose-only section warns {media(_with(base, hidden))}")
+    if shown := media(_with(base, _DIAGRAM)):
+        pytest.fail(f"section with a diagram warns {shown}")
+
+
+def test_media_lint_flags_a_diagram_in_detail(tmp_path: Path) -> None:
+    """A detail diagram warns at its authored path, so it moves next to its text."""
+    base = _lesson(tmp_path, _CLEAN_FINAL)
+    hidden = dataclasses.replace(_DIAGRAM, depth="detail")
+
+    rules = _rules(_with(base, _DIAGRAM, hidden))
+
+    if rules != [("diagram_in_detail", "sections[0].elements[1]")]:
+        pytest.fail(f"detail diagram warns {rules}")
+
+
+def test_media_lint_flags_trace_rejected_for_behaviour(tmp_path: Path) -> None:
+    """Rejecting `trace` when the plan covers behaviour warns; a document is exempt.
+
+    Recording runs in a parallel subagent, so time is never a reason to skip it.
+    A document lesson may not hold a trace at all.
+    """
+    base = _lesson(tmp_path, _CLEAN_FINAL)
+    rejected = _with(base, _DIAGRAM, plan=_plan("concept", ("behaviour",), ("trace",)))
+    document = _with(base, _DIAGRAM, plan=_plan("document", ("behaviour",), ("trace",)))
+
+    if _rules(rejected) != [("trace_rejected", "plan.rejected")]:
+        pytest.fail(f"rejected trace warns {media(rejected)}")
+    if "record one" not in media(rejected)[0].message:
+        pytest.fail(f"message does not say to record: {media(rejected)[0].message}")
+    if shown := media(document):
+        pytest.fail(f"document lesson warns {shown}")
+
+
+@pytest.mark.parametrize(
+    ("rationale", "warns"),
+    [
+        ("No trace: the handler needs a live database to run.", False),
+        ("A trace would not fit the time budget.", True),
+        ("A trace would take too long to record.", True),
+    ],
+)
+def test_media_lint_accepts_a_trace_rejection_only_with_a_reason_besides_time(
+    tmp_path: Path, rationale: str, *, warns: bool
+) -> None:
+    """A rationale naming why the code cannot run clears the warning; time does not."""
+    base = _lesson(tmp_path, _CLEAN_FINAL)
+    plan = _plan("concept", ("behaviour",), ("trace",), rationale)
+
+    rules = [rule for rule, _ in _rules(_with(base, _DIAGRAM, plan=plan))]
+
+    if (rules == ["trace_rejected"]) != warns:
+        pytest.fail(f"rationale {rationale!r} warns {rules}")
+
+
+def test_media_lint_flags_an_area_lesson_without_names_first(tmp_path: Path) -> None:
+    """An area lesson needs its names in its first section; a concept one does not."""
+    base = _lesson(tmp_path, _CLEAN_FINAL)
+    area = _with(base, _DIAGRAM, plan=_plan("area", ("structure",), ()))
+
+    if _rules(area) != [("no_names_first", "sections[0]")]:
+        pytest.fail(f"area lesson without vocab warns {media(area)}")
+    if shown := media(_with(base, _VOCAB, plan=_plan("area", ("structure",), ()))):
+        pytest.fail(f"area lesson with vocab warns {shown}")
+    if shown := media(_with(base, _DIAGRAM, plan=_plan("concept", ("structure",), ()))):
+        pytest.fail(f"concept lesson warns {shown}")
+
+
+VIEWS = Path(__file__).parent.parent / "fixtures" / "lessons" / "valid_views.json"
+
+
+def _views_lesson() -> Lesson:
+    return load_lesson(VIEWS, PROJECT)
+
+
+def _edit_element(
+    lesson: Lesson, view_id: str, edit: Callable[[ViewElement], ViewElement]
+) -> Lesson:
+    sections = tuple(
+        dataclasses.replace(
+            section,
+            elements=tuple(
+                edit(e) if isinstance(e, ViewElement) and e.id == view_id else e
+                for e in section.elements
+            ),
+        )
+        for section in lesson.sections
+    )
+    return dataclasses.replace(lesson, sections=sections)
+
+
+def _add_elements(lesson: Lesson, index: int, *elements: Element) -> Lesson:
+    section = lesson.sections[index]
+    changed = dataclasses.replace(section, elements=(*elements, *section.elements))
+    sections = (*lesson.sections[:index], changed, *lesson.sections[index + 1 :])
+    return dataclasses.replace(lesson, sections=sections)
+
+
+def _plan_with(
+    lesson: Lesson,
+    rationale: tuple[str, ...] | None = None,
+    rejected: tuple[str, ...] | None = None,
+) -> Lesson:
+    if lesson.plan is None:
+        pytest.fail("the views fixture has no plan")
+    plan = dataclasses.replace(
+        lesson.plan,
+        rationale=lesson.plan.rationale if rationale is None else rationale,
+        rejected=lesson.plan.rejected if rejected is None else rejected,
+    )
+    return dataclasses.replace(lesson, plan=plan)
+
+
+def _rationale(lesson: Lesson) -> tuple[str, ...]:
+    return lesson.plan.rationale if lesson.plan else ()
+
+
+def _long_code() -> CodeElement:
+    return CodeElement(code=CodeBlock("python", "\n".join(["x = 1"] * 13)))
+
+
+def test_the_views_fixture_passes_every_media_rule() -> None:
+    """The fixture is the reference lesson for views, so it must lint clean."""
+    if warnings := media(_views_lesson()):
+        pytest.fail(f"the views fixture warns {warnings}")
+
+
+@pytest.mark.parametrize(
+    ("rule", "path", "edit"),
+    [
+        (
+            "code_too_long",
+            "sections[1].elements[1]",
+            lambda lesson: _add_elements(lesson, 1, _DIAGRAM, _long_code()),
+        ),
+        (
+            "code_first",
+            "sections[1]",
+            lambda lesson: _add_elements(
+                lesson, 1, CodeElement(code=CodeBlock("python", "x = 1"))
+            ),
+        ),
+        (
+            "heavy_elements",
+            "sections[3]",
+            lambda lesson: _edit_element(
+                lesson, "v-read", lambda v: dataclasses.replace(v, layout="steps")
+            ),
+        ),
+        (
+            "view_too_wide",
+            "sections[2].elements[1]",
+            lambda lesson: _edit_element(
+                lesson,
+                "v-rules",
+                lambda v: dataclasses.replace(
+                    v,
+                    encode={
+                        "columns": [{"field": f, "label": f} for f in "abcdef"],
+                        "key": "seq",
+                    },
+                ),
+            ),
+        ),
+        (
+            "first_case_masked",
+            "sections[1].elements[0]",
+            lambda lesson: _edit_element(
+                lesson, "v-drop", lambda v: dataclasses.replace(v, gate="cp-prompts")
+            ),
+        ),
+        (
+            "many_datasets",
+            "plan.rationale",
+            lambda lesson: _plan_with(
+                lesson, rationale=(_rationale(lesson)[0], _rationale(lesson)[2])
+            ),
+        ),
+        (
+            "authored_data",
+            "datasets[2]",
+            lambda lesson: _plan_with(lesson, rationale=_rationale(lesson)[:2]),
+        ),
+        (
+            "stale_data",
+            "datasets[0]",
+            lambda lesson: dataclasses.replace(
+                lesson,
+                datasets=(
+                    dataclasses.replace(lesson.datasets[0], stale=("src/stream.py",)),
+                    *lesson.datasets[1:],
+                ),
+            ),
+        ),
+        (
+            "rejected_for_time",
+            "plan.rejected[0]",
+            lambda lesson: _plan_with(
+                lesson,
+                rejected=("diagram",),
+                rationale=(
+                    *_rationale(lesson),
+                    "A diagram would take too long to draw.",
+                ),
+            ),
+        ),
+        (
+            "final_transfer_missing",
+            "final",
+            lambda lesson: dataclasses.replace(
+                lesson, final=(lesson.final[1], lesson.final[3])
+            ),
+        ),
+        (
+            "final_wrong_data_missing",
+            "final",
+            lambda lesson: dataclasses.replace(
+                lesson, final=(lesson.final[0], *lesson.final[2:])
+            ),
+        ),
+    ],
+)
+def test_each_view_lint_rule_fires_at_its_path(
+    rule: str, path: str, edit: Callable[[Lesson], Lesson]
+) -> None:
+    """Each rule warns at the path to fix, and only that rule fires."""
+    rules = [(w.rule, w.path) for w in media(edit(_views_lesson()))]
+
+    if rules != [(rule, path)]:
+        pytest.fail(f"expected only {(rule, path)}, got {rules}")
+
+
+def test_a_gate_answer_stated_in_the_section_video_warns(tmp_path: Path) -> None:
+    """A video that says the gate's correct option gives the gate away."""
+    base = _lesson(tmp_path, _CLEAN_FINAL)
+    video = VideoElement(
+        id="purpose-video",
+        src="/v.mp4",
+        captions="/v.vtt",
+        duration=60.0,
+        transcript="A cache built with capacity two holds two items, no more.",
+    )
+    section = dataclasses.replace(base.sections[0], elements=(video,))
+    lesson = dataclasses.replace(base, sections=(section,))
+
+    given = [w.path for w in media(lesson) if w.rule == "gate_given_away"]
+    if given != ["sections[0].checkpoints[0]"]:
+        pytest.fail(f"gate_given_away at {given}")
+    if any(w.rule == "gate_given_away" for w in media(base)):
+        pytest.fail("the lesson without the video warns")

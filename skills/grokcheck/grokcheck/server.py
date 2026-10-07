@@ -46,11 +46,14 @@ _WEB_FILES: dict[str, tuple[str, str]] = {
     "/index.html": ("index.html", "text/html; charset=utf-8"),
     "/style.css": ("style.css", "text/css; charset=utf-8"),
     "/api.js": ("api.js", "text/javascript; charset=utf-8"),
+    "/grading.js": ("grading.js", "text/javascript; charset=utf-8"),
     "/app.js": ("app.js", "text/javascript; charset=utf-8"),
     "/questions.js": ("questions.js", "text/javascript; charset=utf-8"),
     "/markdown.js": ("markdown.js", "text/javascript; charset=utf-8"),
     "/codeview.js": ("codeview.js", "text/javascript; charset=utf-8"),
     "/elements.js": ("elements.js", "text/javascript; charset=utf-8"),
+    "/view.js": ("view.js", "text/javascript; charset=utf-8"),
+    "/select.js": ("select.js", "text/javascript; charset=utf-8"),
     "/storage.js": ("storage.js", "text/javascript; charset=utf-8"),
     "/stepper.js": ("stepper.js", "text/javascript; charset=utf-8"),
     "/diffview.js": ("diffview.js", "text/javascript; charset=utf-8"),
@@ -72,6 +75,15 @@ _WEB_FILES: dict[str, tuple[str, str]] = {
         "vendor/mermaid/mermaid.tiny.js",
         "text/javascript; charset=utf-8",
     ),
+    **{
+        f"/vendor/fonts/{name}": (f"vendor/fonts/{name}", "font/woff2")
+        for name in (
+            "bricolage-grotesque-latin-wght-normal.woff2",
+            "atkinson-hyperlegible-latin-400-normal.woff2",
+            "atkinson-hyperlegible-latin-700-normal.woff2",
+            "jetbrains-mono-latin-wght-normal.woff2",
+        )
+    },
 }
 
 

@@ -62,6 +62,7 @@ Each section is prose plus any of these elements, followed by its checkpoint que
 
 | Element | What you see |
 |---------|--------------|
+| View | A picture drawn from rows recorded by running the real code: events in lanes, a table, a code walk, named blocks or the path a decision took. You can vary the inputs, and a varied case stays hidden until you predict it |
 | Code | The lines the section is about |
 | Diff | One hunk of a change, with notes you click to highlight their lines and a prepared question per line |
 | Vocabulary | The names you need, each marking its lines in the code when clicked |
@@ -195,7 +196,20 @@ Submitting a lesson schedules every missed or confident-wrong question for a re-
 
 To keep the misses outside grokcheck, ask for an export: `grokcheck export <lesson-id> --format anki` writes a tab-separated file Anki imports, and `--format obsidian --vault <folder>` writes one new note into an Obsidian vault without touching the notes already there.
 
-When the code or the discussion has moved on since a lesson, ask the agent to refresh it. `grokcheck refresh` reruns the lesson's experiments and reports which claims no longer match the code, so only those sections are rewritten.
+To share a lesson with someone who has no grokcheck, `grokcheck export <lesson-id> --format html [--out <file>]` writes the lesson page as one HTML file that opens from disk with no server: the same design, gates, diagrams, stepper, videos, final quiz and debrief, graded in the browser. The file carries the answer keys, so give it to readers, not to people you are testing. Asking questions, Socratic mode and the agent's re-grading of free-text answers need the agent and do not work offline, and mutation and fix-the-bug questions, which run the project's tests, are shown as skipped and left out of the score. Videos are re-encoded at 720p, or left out with their transcript kept, when the file would pass 14 MB. `--fragment` writes the page without the document tags, for a host page that wraps it.
+
+When the code or the discussion has moved on since a lesson, ask the agent to refresh it. `grokcheck refresh` reruns the lesson's experiments and reports which claims and recorded examples no longer match the code, so only those sections are rewritten.
+
+### Recorded examples
+
+The values a view shows are recorded, not typed. The agent writes a short driver script that calls the code and reports each value with `emit(...)`, and `grokcheck record` runs it once per combination of inputs, each in a fresh process:
+
+```
+grokcheck record .grokcheck/drivers/reconnect.py --id reconnect --cite src/stream.py \
+  --matrix running=0,1 drop=1..4 lid=2..6 --python .venv/bin/python
+```
+
+The rows go to `.grokcheck/data/<id>.json` with the lines of the cited files each run executed, the commit and the driver's hash. A record whose runs never executed a cited line is refused, so rows cannot come from a driver that only prints. `--python` runs the driver under the project's own interpreter, which needs no install of grokcheck. `grokcheck data show <id>` prints a summary and sample rows, `data wrong` makes a copy with one deliberate error for the final quiz, and `data author` accepts rows typed by hand when nothing can run the code, each row citing the lines it comes from.
 
 ### Where lessons are stored
 
@@ -253,14 +267,23 @@ Everything that needs heavier tools lives in the optional `grokcheck-media` skil
 
 `grokcheck-media` turns a lesson you already ran into media that outlives the browser session. It does not trigger on its own; ask for it by name, for example `/grokcheck-media .grokcheck/lessons/<lesson-id> deck`.
 
+The video tools live in their own Python environment, the media venv, so the core keeps no dependencies. The first time you make a lesson, the agent asks once whether to install them. A yes runs `setup` in the background while the lesson is written, and the lesson's sections get a one-minute narrated video each when setup finishes in time; otherwise the videos come with the next lesson. A no is remembered, and the agent does not ask again unless you ask for video. To install them yourself:
+
+```sh
+python3 skills/grokcheck-media/grokcheck_media setup
+```
+
+It needs [uv](https://docs.astral.sh/uv/) and takes a few minutes and about 2.3 GB of disk: Manim, Kokoro speech, faster-whisper, Playwright Chromium and a static ffmpeg, at pinned versions. Inside Claude Code it installs into the plugin's data folder, `$CLAUDE_PLUGIN_DATA/media/`, which survives plugin updates; from a checkout it uses `~/.cache/grokcheck/`. Running it again only fills what is missing, and after an update that changes the pinned versions it brings the venv up to date. Every media command runs itself under the media venv once it exists, so there is nothing to activate.
+
 | Command | Makes | Needs |
 |---------|-------|-------|
-| `doctor` | A list of which optional tools are installed | nothing |
+| `setup` | The media venv, the Kokoro voice files and the speech recognition model; `setup --decline` records a no | uv |
+| `doctor` | The media venv's state (`ready`, `missing`, `out_of_date` or `declined`) and which optional tools are installed | nothing |
 | `export reveal` | A reveal.js deck, one slide per section, checkpoints as speaker notes, opening offline from disk | nothing (reveal.js is vendored) |
 | `render stepper` | A narrated MP4 of a trace's steps | ffmpeg, Playwright Chromium |
 | `video plan`, `video chapter`, `video join` | A narrated concept video in chapters, each checked against the code it cites and cached, which a lesson can embed as a video element | ffmpeg, Manim or HyperFrames, faster-whisper, Kokoro (or ElevenLabs when you allow cloud speech) |
 
-Run `doctor` first: it maps each tool to its path, or `null` when it is missing. A command whose tool is missing prints what to install and stops; it never installs anything itself.
+Run `doctor` first: it maps each tool to its path, or `null` when it is missing. A command whose tool is missing prints what to install and stops; only `setup` installs anything.
 
 ## Development
 

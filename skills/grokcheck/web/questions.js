@@ -1,6 +1,7 @@
 import { runTests } from "./api.js";
 import { renderCode } from "./codeview.js";
 import { renderMarkdown } from "./markdown.js";
+import { mountView, viewById } from "./view.js";
 
 const OUTCOME_LABELS = {
   correct: "Correct",
@@ -8,9 +9,12 @@ const OUTCOME_LABELS = {
   partial: "Partly correct",
   needs_review: "Needs review: your agent will check this answer",
   self_rated: "Self-rated",
+  skipped: "Skipped: needs grokcheck to run the tests",
 };
 
 export const REVEAL_EVENT = "grokcheck:reveal";
+
+const frames = new Map();
 
 export function moveStep(order, index, delta) {
   const target = index + delta;
@@ -69,10 +73,72 @@ const RENDERERS = {
   fill_blank: renderFillBlank,
   mutation_quiz: renderMutationQuiz,
   fix_the_bug: renderFixTheBug,
-  predict_state: (question, { onChange }) => choiceGroup(question, "radio", onChange),
+  predict_state: renderPredictState,
   change_impact: renderChangeImpact,
   parsons: renderParsons,
+  select_items: (question, { onChange }) => renderOnView(question, onChange, (picked) => `${picked?.length ?? 0} selected`),
+  fill_table: (question, { onChange }) =>
+    renderOnView(question, onChange, (filled) => `${Object.values(filled ?? {}).reduce((sum, row) => sum + Object.keys(row).length, 0)} of ${question.blanks.length} filled`),
 };
+
+function questionView(question) {
+  if (question.frame) {
+    if (!frames.get(question.id)?.element.isConnected) {
+      frames.set(question.id, mountView(question.frame).handle);
+    }
+    const handle = frames.get(question.id);
+    return { element: handle.element, handle, inline: true };
+  }
+  const handle = viewById(question.view);
+  return handle ? { element: handle.element, handle, inline: false } : null;
+}
+
+function renderOnView(question, onChange, counted) {
+  const view = questionView(question);
+  if (!view) {
+    return { element: element("p", { class: "error", text: `The view ${question.view} is missing.` }), getResponse: () => null };
+  }
+  const count = element("p", { class: "status view-count", "aria-live": "polite" });
+  let session = null;
+  const start = () => {
+    session ??= view.handle.answer(question, () => {
+      count.textContent = counted(session.response());
+      onChange();
+    });
+    count.textContent = counted(session.response());
+  };
+  const go = element("button", { type: "button", text: "Answer on the view" });
+  go.addEventListener("click", () => {
+    start();
+    view.handle.focus();
+  });
+  if (view.inline || view.handle.state.items.some((item) => item._masked)) {
+    start();
+  } else {
+    count.textContent = counted(question.blanks ? {} : []);
+  }
+  return {
+    element: element("div", { class: "view-answer" }, [view.inline ? view.element : go, count]),
+    getResponse() {
+      const response = session?.response() ?? null;
+      return response === null || response.length === 0 ? null : response;
+    },
+  };
+}
+
+function renderPredictState(question, { onChange }) {
+  const choices = choiceGroup(question, "radio", onChange);
+  const handle = question.view ? viewById(question.view) : null;
+  if (!handle) {
+    return choices;
+  }
+  const go = element("button", { type: "button", text: `Show step ${question.step + 1}` });
+  go.addEventListener("click", () => {
+    handle.goStep(question.step);
+    handle.focus();
+  });
+  return { ...choices, element: element("div", {}, [go, choices.element]) };
+}
 
 function choiceGroup(question, kind, onChange) {
   const inputs = question.options.map((_, index) =>
@@ -447,7 +513,7 @@ export function renderReveal(question, grade) {
   const parts = [
     element("p", { class: `outcome outcome-${outcome}` }, [
       element("strong", { text: OUTCOME_LABELS[outcome] ?? outcome }),
-      outcome === "correct" || outcome === "incorrect" ? "" : ` (score ${Math.round(score * 100)}%)`,
+      ["correct", "incorrect", "skipped"].includes(outcome) ? "" : ` (score ${Math.round(score * 100)}%)`,
     ]),
   ];
   if (reveal.why.length > 0) {
@@ -521,6 +587,9 @@ export function renderReveal(question, grade) {
   if (reveal.element_payload) {
     document.dispatchEvent(new CustomEvent(REVEAL_EVENT, { detail: { gate: question.id, ...reveal.element_payload } }));
   }
+  if (reveal.answer_cells?.length || Object.keys(reveal.cells ?? {}).length) {
+    parts.push(revealedCells(question, reveal, response));
+  }
   return element("div", { class: "reveal" }, parts);
 }
 
@@ -568,6 +637,20 @@ function revealedLines(code, answerLines) {
     line.classList.toggle("answer-line", answerLines.includes(index + 1));
   });
   return element("div", {}, [element("p", { text: `Answer lines: ${answerLines.join(", ")}` }), view]);
+}
+
+function revealedCells(question, reveal, response) {
+  const live = question.frame ? frames.get(question.id) : viewById(question.view);
+  const reuse = live?.element.isConnected && !live.element.closest(".final-quiz");
+  const shown = reuse ? live : question.frame ? mountView(question.frame).handle : null;
+  shown?.showAnswer(reveal, response);
+  const cells = reveal.answer_cells?.length
+    ? reveal.answer_cells
+    : Object.entries(reveal.cells).flatMap(([cell, fields]) => Object.entries(fields).map(([field, value]) => `${cell}: ${field} = ${JSON.stringify(value)}`));
+  return element("div", {}, [
+    shown && shown !== live ? shown.element : "",
+    labelledList(reveal.answer_cells?.length ? "The answer:" : "The right values:", cells),
+  ]);
 }
 
 function labelledList(label, items) {

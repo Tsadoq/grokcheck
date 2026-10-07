@@ -1,0 +1,78 @@
+{
+ "format": 1,
+ "id": "terms",
+ "fields": {
+  "term": "str",
+  "group": "str",
+  "meaning": "str"
+ },
+ "rows": [
+  {
+   "term": "cursor",
+   "group": "reading",
+   "meaning": "The id of the last event the reader saw.",
+   "cite": {
+    "file": "src/stream.py",
+    "lines": [
+     30,
+     30
+    ],
+    "quote": "cursor: int"
+   }
+  },
+  {
+   "term": "Beyond",
+   "group": "reading",
+   "meaning": "Raised when the cursor is past the last event.",
+   "cite": {
+    "file": "src/stream.py",
+    "lines": [
+     32,
+     33
+    ],
+    "quote": "raise Beyond(cursor)"
+   }
+  },
+  {
+   "term": "replay",
+   "group": "paths",
+   "meaning": "Yields the stored events after the cursor.",
+   "cite": {
+    "file": "src/stream.py",
+    "lines": [
+     45,
+     48
+    ]
+   }
+  },
+  {
+   "term": "follow",
+   "group": "paths",
+   "meaning": "Replays, then yields events as the running turn appends them.",
+   "cite": {
+    "file": "src/stream.py",
+    "lines": [
+     51,
+     55
+    ]
+   }
+  }
+ ],
+ "runs": [],
+ "source": {
+  "kind": "authored",
+  "reason": "Names are definitions read from the code, not behaviour a run shows.",
+  "verdicts": {},
+  "head": "cd5b5d1da15f8092cdd0ec108381db47d5ba0cc7",
+  "dirty": [
+   "src/stream.py"
+  ],
+  "cited": [
+   {
+    "file": "src/stream.py",
+    "sha256": "6d9939abfebdc146708a945243e022907fd54cf6370a8390932dc1799747148b"
+   }
+  ]
+ },
+ "recorded_at": "2026-10-06T14:14:29Z"
+}

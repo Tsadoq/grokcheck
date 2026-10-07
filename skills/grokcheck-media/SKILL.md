@@ -4,7 +4,7 @@ description: Renders a finished grokcheck lesson as a reveal.js deck, a narrated
 argument-hint: "<lesson dir> [deck | stepper | video]"
 disable-model-invocation: true
 allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/grokcheck_media *)
-compatibility: Requires Python 3.11+. Optional, per command - ffmpeg, Playwright Chromium, Manim or HyperFrames, Kokoro, mmdc.
+compatibility: Requires Python 3.11+. Video needs uv for `setup`, which installs ffmpeg, Playwright Chromium, Manim, Kokoro and faster-whisper into a media venv. Optional - HyperFrames, mmdc.
 ---
 
 # grokcheck-media
@@ -19,7 +19,9 @@ Issue every command as one plain Bash call of this exact form, with no `cd` pref
 python3 ${CLAUDE_SKILL_DIR}/grokcheck_media <command> ...
 ```
 
-Every command prints one JSON line. A failure prints `{"ok": false, "error": ...}` and exits with status 1. A command whose tool is missing prints `{"ok": false, "skipped": "<tool> not installed; <install hint>"}` instead: pass the hint to the user and stop; do not install anything yourself.
+Every command prints one JSON line. A failure prints `{"ok": false, "error": ...}` and exits with status 1. A command whose tool is missing prints `{"ok": false, "skipped": "<tool> not installed; <install hint>"}` instead: pass the hint to the user and stop; install nothing yourself beyond the `setup` command below, and run that only when the user agreed to it.
+
+Once the media venv exists, every command re-runs itself under the venv's python with the venv's `bin` first on `PATH`, so the plain call above is all it takes.
 
 ## 1. Check the tools
 
@@ -27,9 +29,23 @@ Every command prints one JSON line. A failure prints `{"ok": false, "error": ...
 python3 ${CLAUDE_SKILL_DIR}/grokcheck_media doctor
 ```
 
-It maps each optional tool to its path, or `null` when missing. Tell the user which commands below are available.
+It prints `status`, the media venv's state, and `tools`, each optional tool mapped to its path or `null`. Tell the user which commands below are available.
 
-Manim and faster-whisper need the same PyAV: `av>=15,<17` works for both (faster-whisper 1.2 fails on av 19, Manim 0.21 on av below 15). Kokoro's phonemizer cannot read its espeak-ng data from a path longer than about 160 characters, so keep the Python environment that runs these commands at a short path.
+| `status` | Meaning |
+|----------|---------|
+| `ready` | The media venv matches this plugin version's pins and the Kokoro files are present. |
+| `missing` | Nothing is installed and the user has not answered. |
+| `out_of_date` | The user installed it before, and an update changed the pins. Run `setup` again without asking. |
+| `declined` | The user said no. Do not ask again unless they ask for video. |
+
+`setup` creates or updates the media venv with uv: pinned Manim, kokoro-onnx, faster-whisper, Playwright with its Chromium, imageio-ffmpeg and `av>=15,<17` (faster-whisper 1.2 fails on av 19, Manim 0.21 on av below 15). It downloads the Kokoro voice files and the faster-whisper model, links ffmpeg into the venv's `bin`, and records a stamp of the plugin version and the pins. It lives in `$CLAUDE_PLUGIN_DATA/media/` when that is set and in `~/.cache/grokcheck/` otherwise. When the venv path is too long for Kokoro's phonemizer (about 160 characters for espeak-ng's data files), it copies espeak-ng's data to `~/.cache/grokcheck/espeak-ng-data/` and speech uses that copy. It asks nothing, takes a few minutes the first time, and prints `{"ok": true, "status", "venv", "did"}`, where `did` lists the steps it ran; a second run only fills gaps.
+
+```
+python3 ${CLAUDE_SKILL_DIR}/grokcheck_media setup
+python3 ${CLAUDE_SKILL_DIR}/grokcheck_media setup --decline
+```
+
+`setup` records that the user said yes; `setup --decline` only records a no.
 
 ## 2. Export a deck
 
@@ -61,10 +77,10 @@ Needs ffmpeg, Manim or HyperFrames, faster-whisper, and Kokoro (or ElevenLabs wi
 
    Use `<project root>/.grokcheck/video/` as `<out dir>` below: a `video` element may point into the directory of the lesson file it sits in, which for `.grokcheck/draft.json` is `.grokcheck/`, or into the cache.
 
-2. For each chapter, launch one subagent with its spec, the `concept_id`, the lesson's sections it covers and `references/video-script-rules.md`. The subagent:
+2. For each chapter, launch one subagent with its spec, the `concept_id`, the lesson's sections it covers, their gate and checkpoint questions with the answers, and `references/video-script-rules.md`. Pass each gate's correct answer as `--avoid`. The subagent:
    - reads the sections and the cited lines, and writes the script JSON the rules describe to `<out dir>/<chapter id>.json`;
-   - runs `python3 ${CLAUDE_SKILL_DIR}/grokcheck_media video chapter <out dir>/<chapter id>.json --renderer manim|hyperframes --out-dir <out dir> --project <project root> [--allow-cloud]`;
-   - reads the contact sheet image, the `transcript_diff` and the `claims` manifest it prints, judging every claim against its evidence alone, and fixes the script and re-runs until all three are clean;
+   - runs `python3 ${CLAUDE_SKILL_DIR}/grokcheck_media video chapter <out dir>/<chapter id>.json --renderer manim|hyperframes --out-dir <out dir> --project <project root> [--avoid <text>]... [--allow-cloud]`; each `--avoid` is an answer the chapter must not give away, and a script that says or shows one is refused;
+   - reads the contact sheet image, full-size frames of the busiest beats, the `transcript_diff` and the `claims` manifest it prints, judging every claim against its evidence alone, and fixes the script and re-runs until all are clean. Frames come from `python3 ${CLAUDE_SKILL_DIR}/grokcheck_media video frames <video> --at <seconds>... --out-dir <dir>` (or `--every <seconds>`), which writes full-size PNGs and prints `frames`, each `{at, path}`;
    - reports the chapter's path and any claim it could not support.
 
 3. A chapter whose claim check fails is re-scripted alone; the other chapters stay cached.

@@ -1,6 +1,6 @@
 {
   "name": "grokcheck",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "description": "Turns a change, an area of code, a library, a choice or a document into an interactive browser lesson with checked claims, gated checkpoints, a live quiz and spaced re-tests, plus an optional skill for decks and videos.",
   "author": {
     "name": "tsadoq"

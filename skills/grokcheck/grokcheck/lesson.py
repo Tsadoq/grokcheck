@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import (
     TYPE_CHECKING,
+    Any,
     ClassVar,
     Generic,
     Literal,
@@ -33,7 +34,10 @@ from grokcheck.trace import Trace
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping, Sequence
 
-SCHEMA_VERSION = 2
+    from grokcheck.data import Dataset
+
+SCHEMA_VERSION = 3
+_SCHEMA_VERSIONS = (2, 3)
 VIDEO_CACHE_DIR = Path.home() / ".cache" / "grokcheck" / "videos"
 
 _ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
@@ -51,6 +55,7 @@ _SECRET_FIELDS = frozenset(
         "log",
         "affected",
         "distractors",
+        "answer_cells",
     },
 )
 _LANGUAGES = {
@@ -234,9 +239,10 @@ class FillBlank:
 
 @dataclass(frozen=True, kw_only=True)
 class PredictState:
-    """Predict the state at `step` of `version` of trace `trace_id`, by choice.
+    """Predict the state at `step` of a trace version or of a steps `view`, by choice.
 
-    `version` and `step` are 0-based indexes; graded as `single_choice`.
+    Either `trace_id` with `version` or `view` is set. `version` and `step` are
+    0-based indexes; graded as `single_choice`.
     """
 
     type_name: ClassVar[str] = "predict_state"
@@ -244,8 +250,9 @@ class PredictState:
     prompt: str
     explanation: str = ""
     code: CodeBlock | None = None
-    trace_id: str
-    version: int
+    trace_id: str | None = None
+    version: int | None = None
+    view: str | None = None
     step: int
     options: tuple[Option, ...]
     correct: int
@@ -338,6 +345,48 @@ class Parsons:
     distractors: tuple[Option, ...]
 
 
+@dataclass(frozen=True, kw_only=True)
+class SelectItems:
+    """Pick the items of a view that `answer` matches.
+
+    `view` names a section view; a final or probe carries its inline view as
+    the public `frame` instead. `candidates` are the cells the reader may pick,
+    `answer_cells` the cells `answer` matches.
+    """
+
+    type_name: ClassVar[str] = "select_items"
+    id: str
+    prompt: str
+    explanation: str = ""
+    view: str | None = None
+    frame: dict[str, object] | None = None
+    answer: dict[str, object]
+    candidates: tuple[str, ...] = ()
+    answer_cells: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class TableBlank:
+    """One masked `field` of the table item whose `_cell` is `cell`."""
+
+    cell: str
+    field: str
+
+
+@dataclass(frozen=True, kw_only=True)
+class FillTable:
+    """Fill the masked cells of a `table` view; `cells` holds the right values."""
+
+    type_name: ClassVar[str] = "fill_table"
+    id: str
+    prompt: str
+    explanation: str = ""
+    view: str | None = None
+    frame: dict[str, object] | None = None
+    blanks: tuple[TableBlank, ...] = ()
+    cells: dict[str, dict[str, object]] = dataclasses.field(default_factory=dict)
+
+
 Question = (
     SingleChoice
     | MultipleChoice
@@ -351,6 +400,8 @@ Question = (
     | FixTheBug
     | ChangeImpact
     | Parsons
+    | SelectItems
+    | FillTable
 )
 
 
@@ -393,7 +444,15 @@ class Unverified:
     reason: str
 
 
-Backing = LinesBacking | SourceBacking | SpikeBacking | Unverified
+@dataclass(frozen=True)
+class DataBacking:
+    """The rows of recorded dataset `data` that the selector `rows` matches."""
+
+    data: str
+    rows: dict[str, object]
+
+
+Backing = LinesBacking | SourceBacking | SpikeBacking | Unverified | DataBacking
 Verdict = Literal["supported", "contradicted", "unchecked"]
 _VERDICTS: tuple[Verdict, ...] = get_args(Verdict)
 BACKING_CLASSES: dict[str, type[Backing]] = {
@@ -401,6 +460,7 @@ BACKING_CLASSES: dict[str, type[Backing]] = {
     "url": SourceBacking,
     "spike_id": SpikeBacking,
     "reason": Unverified,
+    "data": DataBacking,
 }
 """Each backing class, keyed by the one field that marks a backing as that kind."""
 
@@ -824,6 +884,194 @@ class VideoElement:
     claims: tuple[Claim, ...] = ()
 
 
+_VIEW_OPTIONAL = frozenset(
+    {"data", "where", "encode", "split", "inputs", "presets", "tasks", "missing"}
+    | {"marks", "layers", "notes", "mask", "fill", "gate", "steps", "nodes"}
+)
+Layout = Literal["lanes", "table", "steps", "blocks", "decision"]
+LAYOUTS: tuple[Layout, ...] = get_args(Layout)
+KIND_COLOURS = ("accent", "ok", "warn", "bad", "replay", "num", "fn", "muted")
+
+
+@dataclass(frozen=True)
+class Kind:
+    """A class of view item, drawn as a chip with `label` in colour token `colour`."""
+
+    id: str
+    label: str
+    colour: str
+
+
+@dataclass(frozen=True)
+class DatasetUse:
+    """A dataset the lesson declares, with what was read from its file at load.
+
+    `source` is the file's `source.kind`; `provenance` is what the page shows
+    under a view; `stale` lists cited files changed since the recording.
+    """
+
+    id: str
+    held_out: dict[str, object] | None = None
+    source: str = "run"
+    provenance: dict[str, object] | None = None
+    stale: tuple[str, ...] = ()
+
+
+Control = Literal["range", "toggle", "select"]
+Place = Literal["column", "status"]
+NodeKind = Literal["check", "outcome"]
+
+
+@dataclass(frozen=True)
+class ViewInput:
+    """A control choosing the value of `field`; `values` are computed at load."""
+
+    field: str
+    label: str
+    control: Control
+    default: object
+    follows: str | None = None
+    hint: str = ""
+    values: tuple[object, ...] = ()
+
+
+@dataclass(frozen=True)
+class ViewPreset:
+    """A named scenario: `values` maps input fields to values."""
+
+    label: str
+    values: dict[str, object]
+
+
+@dataclass(frozen=True)
+class ViewTask:
+    """Met once an item of the current scenario matches the selector `when`."""
+
+    text: str
+    when: dict[str, object]
+
+
+@dataclass(frozen=True)
+class Mark:
+    """A label on the items `where` matches, above their column or in the status."""
+
+    where: dict[str, object]
+    text: str
+    tone: str = "accent"
+    place: Place = "column"
+
+
+@dataclass(frozen=True)
+class Layer:
+    """A toggle showing extra `fields` under the items `where` matches."""
+
+    id: str
+    label: str
+    fields: tuple[str, ...]
+    where: dict[str, object] = dataclasses.field(default_factory=dict)
+    on: bool = False
+
+
+@dataclass(frozen=True)
+class ViewNote:
+    """A grounded statement about the items `where` matches."""
+
+    where: dict[str, object]
+    text: str
+    verified: Verdict = "unchecked"
+
+
+@dataclass(frozen=True)
+class Span:
+    """Lines of a file from 1-based `start_line`, joined by newlines in `text`."""
+
+    start_line: int
+    text: str
+
+
+@dataclass(frozen=True)
+class StepCode:
+    """The code a step shows: one or more spans of one project file."""
+
+    file: str
+    language: str
+    spans: tuple[Span, ...]
+
+
+@dataclass(frozen=True)
+class ViewStep:
+    """One step of a `steps` view: its code, a note, links and state chips.
+
+    A step of a data steps view has its item's `line` and `show` fields and no
+    note.
+    """
+
+    code: StepCode
+    note: str = ""
+    link: tuple[str, ...] = ()
+    show: dict[str, object] = dataclasses.field(default_factory=dict)
+    line: int | None = None
+    verified: Verdict = "unchecked"
+
+
+@dataclass(frozen=True)
+class DecisionNode:
+    """A check or outcome of a `decision` view, cut from the cited `code` lines.
+
+    `yes` is the span whose running means a check answered yes; `example`
+    names input values that reach the node.
+    """
+
+    id: str
+    label: str
+    kind: NodeKind
+    code: CodeBlock
+    lines: tuple[int, int]
+    note: str
+    yes: tuple[int, int] | None = None
+    tone: str | None = None
+    example: dict[str, object] | None = None
+    verified: Verdict = "unchecked"
+
+
+@dataclass(frozen=True, kw_only=True)
+class ViewElement:
+    """A picture drawn from recorded rows, in one of the `LAYOUTS`.
+
+    `items` are the derived items of every scenario, answers included;
+    `inputs_from` names the view whose inputs this one shares. `choices` maps
+    each `fill` field to the values a reader may pick. `matrix` names the
+    dataset's input fields.
+    """
+
+    type_name: ClassVar[str] = "view"
+    id: str
+    layout: Layout
+    caption: str
+    data: str | None = None
+    where: dict[str, object] = dataclasses.field(default_factory=dict)
+    encode: dict[str, object] = dataclasses.field(default_factory=dict)
+    split: str | None = None
+    inputs: tuple[ViewInput, ...] = ()
+    inputs_from: str | None = None
+    presets: tuple[ViewPreset, ...] = ()
+    tasks: tuple[ViewTask, ...] = ()
+    missing: str = ""
+    marks: tuple[Mark, ...] = ()
+    layers: tuple[Layer, ...] = ()
+    notes: tuple[ViewNote, ...] = ()
+    mask: dict[str, object] | None = None
+    fill: tuple[str, ...] = ()
+    gate: str | None = None
+    steps: tuple[ViewStep, ...] = ()
+    nodes: tuple[DecisionNode, ...] = ()
+    items: tuple[dict[str, object], ...] = ()
+    choices: dict[str, list[object]] = dataclasses.field(default_factory=dict)
+    matrix: tuple[str, ...] = ()
+    depth: Depth = "short"
+    claims: tuple[Claim, ...] = ()
+
+
 Element = (
     ProseElement
     | CodeElement
@@ -836,8 +1084,9 @@ Element = (
     | OptionsElement
     | AssumptionsElement
     | VideoElement
+    | ViewElement
 )
-GatedElement = TraceElement | SpikeElement
+GatedElement = TraceElement | SpikeElement | ViewElement
 
 
 @dataclass(frozen=True)
@@ -868,14 +1117,16 @@ class Section:
 Subject = Literal[
     "change", "area", "concept", "library", "options", "decision", "document"
 ]
-_SUBJECTS: tuple[Subject, ...] = get_args(Subject)
+SUBJECTS: tuple[Subject, ...] = get_args(Subject)
 _TIME_BUDGETS = (5, 15, 30)
 _CONTENT = ("structure", "behaviour", "change", "tests")
 _CODE_ONLY = frozenset(
     {"trace", "diff", "mutation_quiz", "fix_the_bug", "spike", "playground"}
 )
-_CLAIM_ID = re.compile(r"sections\[(\d+)\]\.elements\[(\d+)\]\.(claims|items)\[(\d+)\]")
-ClaimKind = Literal["claims", "items"]
+_CLAIM_ID = re.compile(
+    r"sections\[(\d+)\]\.elements\[(\d+)\]\.(claims|items|steps|nodes|notes)\[(\d+)\]"
+)
+ClaimKind = Literal["claims", "items", "steps", "nodes", "notes"]
 
 
 def format_claim_id(section: int, element: int, kind: ClaimKind, index: int) -> str:
@@ -917,7 +1168,7 @@ class Lesson:
     view is the same every time it is produced. `probe` holds closed questions
     asked before the first section to set the starting depth; they never count
     toward the score. `intro` is a short spoken-style opening shown above the
-    first section.
+    first section. `kinds` and `datasets` serve the lesson's views.
     """
 
     title: str
@@ -929,6 +1180,8 @@ class Lesson:
     plan: Plan | None = None
     probe: tuple[Question, ...] = ()
     intro: str | None = None
+    kinds: tuple[Kind, ...] = ()
+    datasets: tuple[DatasetUse, ...] = ()
 
     def public_view(
         self, gated: Callable[[Element], bool] | None = None
@@ -944,6 +1197,8 @@ class Lesson:
             "intro": self.intro,
             "scope": _without_secrets(dataclasses.asdict(self.scope)),
             "plan": dataclasses.asdict(self.plan) if self.plan else None,
+            "kinds": [dataclasses.asdict(kind) for kind in self.kinds],
+            "datasets": [use.provenance for use in self.datasets if use.provenance],
             "probe": [self._public_question(q) for q in self.probe],
             "sections": [
                 {
@@ -966,7 +1221,8 @@ class Lesson:
     def claims(self) -> Iterator[tuple[str, Claim]]:
         """Yield every element claim with its JSON path in the authored lesson.
 
-        Each assumption of an assumptions element is yielded as a claim too.
+        Each assumption of an assumptions element is yielded as a claim too,
+        and so are the notes of a view: its steps, nodes and `notes`.
         """
         for i, section in enumerate(self.sections):
             for j, element in enumerate(section.elements):
@@ -979,6 +1235,9 @@ class Lesson:
                             format_claim_id(i, authored, "items", k),
                             Claim(item.claim, item.backing, item.verified),
                         )
+                if isinstance(element, ViewElement):
+                    for kind, k, claim in _view_claims(element):
+                        yield format_claim_id(i, authored, kind, k), claim
 
     def questions(self) -> Iterator[tuple[str, Question]]:
         """Yield every question with its JSON path in the authored lesson."""
@@ -1002,6 +1261,10 @@ class Lesson:
         if isinstance(question, FixTheBug):
             mutation = question.mutation
             public["mutation"] = {"file": mutation.file, "line": mutation.line}
+        if isinstance(question, FillTable):
+            del public["cells"]
+        if isinstance(question, (SelectItems, FillTable)) and question.frame:
+            public["frame"] = question.frame
         return public
 
     def gated_payload(
@@ -1018,15 +1281,20 @@ class Lesson:
         if isinstance(element, OptionsElement):
             public = self._public_element(element, withhold=False)
             return {key: public[key] for key in ("id", "criteria", "options")}
+        if isinstance(element, ViewElement):
+            from grokcheck import views  # noqa: PLC0415
+
+            return views.gated_payload(element)
         gate = self._gate(element)
-        steps = element.versions[gate.version].steps
+        version = gate.version or 0
+        steps = element.versions[version].steps
         return {
             "trace_id": element.trace_id,
-            "version": gate.version,
+            "version": version,
             "steps": [_without_secrets(dataclasses.asdict(s)) for s in steps],
         }
 
-    def _gate(self, element: TraceElement) -> PredictState:
+    def _gate(self, element: TraceElement | ViewElement) -> PredictState:
         return next(
             question
             for section in self.sections
@@ -1035,6 +1303,13 @@ class Lesson:
         )
 
     def _public_element(self, element: Element, *, withhold: bool) -> dict[str, object]:
+        if isinstance(element, ViewElement):
+            from grokcheck import views  # noqa: PLC0415
+
+            step = None
+            if element.layout == "steps" and element.gate:
+                step = self._gate(element).step
+            return views.public(element, withhold=withhold, step=step)
         public = _without_secrets(dataclasses.asdict(element))
         public["type"] = element.type_name
         if withhold and isinstance(element, TraceElement) and element.gate:
@@ -1042,8 +1317,8 @@ class Lesson:
             versions = cast(
                 "list[dict[str, list[dict[str, object]]]]", public["versions"]
             )
-            for step in versions[gate.version]["steps"][gate.step :]:
-                del step["state"], step["narration"]
+            for hidden in versions[gate.version or 0]["steps"][gate.step :]:
+                del hidden["state"], hidden["narration"]
         if withhold and isinstance(element, SpikeElement):
             del public["result"]
         if withhold and isinstance(element, OptionsElement) and element.reader_first:
@@ -1065,9 +1340,57 @@ def load_lesson(path: Path, project_root: Path) -> Lesson:
         raise LessonError([Problem("$", f"not valid JSON: {exc}")]) from exc
     checker = _Checker(project_root.resolve(), path.parent.resolve())
     lesson = _lesson(checker, raw)
+    if not checker.problems and _drop_stale_verdicts(checker, lesson, raw):
+        checker = _Checker(project_root.resolve(), path.parent.resolve())
+        lesson = _lesson(checker, raw)
     if checker.problems:
         raise LessonError(checker.problems)
     return lesson
+
+
+def _drop_stale_verdicts(
+    checker: _Checker, lesson: Lesson, raw: dict[str, Any]
+) -> bool:
+    """Drop each verdict whose `verified_hash` no longer matches; report the rest.
+
+    A verdict with no hash is kept as written. Returns whether one was dropped.
+    """
+    from grokcheck.ground import claim_at, claim_hash, manifest_entry  # noqa: PLC0415
+
+    dropped = False
+    for claim_id, claim in lesson.claims():
+        holder = claim_at(raw, claim_id)
+        if holder is None or "verified_hash" not in holder:
+            continue
+        entry = manifest_entry(claim_id, claim, checker.project_root, lesson)
+        if holder["verified_hash"] != claim_hash(entry):
+            holder.pop("verified", None)
+            del holder["verified_hash"]
+            dropped = True
+        elif claim.verified == "contradicted":
+            checker.report(
+                _at(claim_id, "verified"), "a contradicted claim cannot be served"
+            )
+    return dropped
+
+
+def _view_claims(view: ViewElement) -> Iterator[tuple[ClaimKind, int, Claim]]:
+    for k, step in enumerate(view.steps):
+        if step.note:
+            spans = step.code.spans
+            first = spans[0].start_line
+            last = spans[-1].start_line + len(spans[-1].text.splitlines()) - 1
+            backing = LinesBacking(step.code.file, (first, max(first, last)))
+            yield "steps", k, Claim(step.note, backing, step.verified)
+    for k, node in enumerate(view.nodes):
+        backing = LinesBacking(node.code.file or "", node.lines)
+        yield "nodes", k, Claim(node.note, backing, node.verified)
+    if view.data:
+        from grokcheck.views import note_rows  # noqa: PLC0415
+
+        for k, note in enumerate(view.notes):
+            backing_rows = DataBacking(view.data, note_rows(view, note))
+            yield "notes", k, Claim(note.text, backing_rows, note.verified)
 
 
 def _without_secrets(value: dict[str, object]) -> dict[str, object]:
@@ -1110,6 +1433,17 @@ class _Checker:
         self.lesson_dir = lesson_dir
         self.problems: list[Problem] = []
         self._first_use: dict[tuple[str, str], str] = {}
+        self.schema_version = SCHEMA_VERSION
+        self.kinds: set[str] = set()
+        self.datasets: dict[str, Dataset] = {}
+        self.uses: dict[str, DatasetUse] = {}
+        self.view_bytes = 0
+
+    def failed_since(self, path: str) -> bool:
+        return any(
+            p.path == path or p.path.startswith((f"{path}.", f"{path}["))
+            for p in self.problems
+        )
 
     def report(self, path: str, message: str) -> None:
         self.problems.append(Problem(path or "$", message))
@@ -1222,13 +1556,17 @@ def _lesson(checker: _Checker, raw: object) -> Lesson:
         raw,
         "",
         frozenset({"schema_version", "title", "scope", "sections", "final"}),
-        frozenset({"seed", "plan", "probe", "intro"}),
+        frozenset({"seed", "plan", "probe", "intro", "kinds", "datasets"}),
     )
-    if "schema_version" in obj and (
-        isinstance(obj["schema_version"], bool)
-        or obj["schema_version"] != SCHEMA_VERSION
-    ):
-        checker.report("schema_version", f"must be {SCHEMA_VERSION}")
+    version = obj.get("schema_version", SCHEMA_VERSION)
+    if isinstance(version, bool) or version not in _SCHEMA_VERSIONS:
+        checker.report("schema_version", "must be 2 or 3")
+    else:
+        checker.schema_version = version
+    from grokcheck import views  # noqa: PLC0415
+
+    kinds = views.kinds(checker, obj)
+    datasets = views.datasets(checker, obj)
     title = checker.text(obj, "title", "")
     seed = zlib.crc32(title.encode())
     if "seed" in obj:
@@ -1260,9 +1598,12 @@ def _lesson(checker: _Checker, raw: object) -> Lesson:
         sections=sections,
         final=final,
         seed=seed,
+        schema_version=checker.schema_version,
         plan=plan,
         probe=probe,
         intro=checker.text(obj, "intro", "") if "intro" in obj else None,
+        kinds=kinds,
+        datasets=datasets,
     )
 
 
@@ -1300,8 +1641,8 @@ def _plan(checker: _Checker, value: object, sections: tuple[Section, ...]) -> Pl
         ),
     )
     subject = obj.get("subject", "change")
-    if subject not in _SUBJECTS:
-        checker.report(_at(path, "subject"), f"must be one of {', '.join(_SUBJECTS)}")
+    if subject not in SUBJECTS:
+        checker.report(_at(path, "subject"), f"must be one of {', '.join(SUBJECTS)}")
     budget = obj.get("time_budget", 30)
     if isinstance(budget, bool) or budget not in _TIME_BUDGETS:
         checker.report(_at(path, "time_budget"), "must be 5, 15 or 30")
@@ -1406,6 +1747,12 @@ def _section(checker: _Checker, value: object, path: str) -> Section:
     _check_spikes(checker, section, path)
     _check_diagrams(checker, section, path)
     _check_videos(checker, section, path)
+    if any(isinstance(e, ViewElement) for e in section.elements) or any(
+        isinstance(q, (SelectItems, FillTable)) for q in section.checkpoints
+    ):
+        from grokcheck import views  # noqa: PLC0415
+
+        section = views.check_section(checker, section, path)
     return section
 
 
@@ -1440,8 +1787,9 @@ def _check_traces(checker: _Checker, section: Section, path: str) -> None:
     traces = {e.trace_id: e for e in section.elements if isinstance(e, TraceElement)}
     predictions = {q.id: q for q in section.checkpoints if isinstance(q, PredictState)}
     for index, question in enumerate(section.checkpoints):
-        if not isinstance(question, PredictState):
+        if not isinstance(question, PredictState) or question.trace_id is None:
             continue
+        version = question.version or 0
         where = _index(_at(path, "checkpoints"), index)
         trace = traces.get(question.trace_id)
         if trace is None:
@@ -1449,17 +1797,17 @@ def _check_traces(checker: _Checker, section: Section, path: str) -> None:
                 _at(where, "trace_id"),
                 f"no trace element '{question.trace_id}' in this section",
             )
-        elif not 0 <= question.version < len(trace.versions):
+        elif not 0 <= version < len(trace.versions):
             checker.report(
                 _at(where, "version"),
-                f"version {question.version} is out of range for"
+                f"version {version} is out of range for"
                 f" {len(trace.versions)} version(s)",
             )
-        elif not 0 <= question.step < len(trace.versions[question.version].steps):
+        elif not 0 <= question.step < len(trace.versions[version].steps):
             checker.report(
                 _at(where, "step"),
                 f"step {question.step} is out of range for"
-                f" {len(trace.versions[question.version].steps)} step(s)",
+                f" {len(trace.versions[version].steps)} step(s)",
             )
     for index, element in enumerate(section.elements):
         if not isinstance(element, TraceElement) or element.gate is None:
@@ -1706,7 +2054,10 @@ def _claims(checker: _Checker, obj: dict[str, object], path: str) -> tuple[Claim
     for index, item in enumerate(checker.array(obj, "claims", path)):
         claim_path = _index(where, index)
         fields = checker.fields(
-            item, claim_path, frozenset({"text", "backing"}), frozenset({"verified"})
+            item,
+            claim_path,
+            frozenset({"text", "backing"}),
+            frozenset({"verified", "verified_hash"}),
         )
         text = checker.text(fields, "text", claim_path)
         verified = _verdict(checker, fields, claim_path, "claim")
@@ -1730,14 +2081,14 @@ def _verdict(
 ) -> Verdict:
     """Return the `verified` field of `fields`, reporting a contradicted or bad one."""
     verified = fields.get("verified", "unchecked")
-    if verified == "contradicted":
+    if verified == "contradicted" and "verified_hash" not in fields:
         checker.report(_at(path, "verified"), f"a contradicted {noun} cannot be served")
     elif verified not in _VERDICTS:
         checker.report(_at(path, "verified"), f"must be one of {', '.join(_VERDICTS)}")
     return cast("Verdict", verified)
 
 
-def _backing(checker: _Checker, value: object, path: str) -> Backing | None:
+def _backing(checker: _Checker, value: object, path: str) -> Backing | None:  # noqa: PLR0911
     """Parse a backing, whose kind is the one `BACKING_CLASSES` key it holds."""
     if not isinstance(value, dict):
         checker.report(path, "must be an object")
@@ -1767,6 +2118,10 @@ def _backing(checker: _Checker, value: object, path: str) -> Backing | None:
                     " (run `grokcheck spike run`)",
                 )
             return SpikeBacking(spike_id)
+        case "data":
+            from grokcheck.views import data_backing  # noqa: PLC0415
+
+            return data_backing(checker, value, path)
     obj = checker.fields(value, path, frozenset({"reason"}))
     return Unverified(checker.text(obj, "reason", path))
 
@@ -2241,12 +2596,25 @@ def _check_blank_markers(
 def _predict_state(
     checker: _Checker, obj: dict[str, object], path: str, stem: _Stem
 ) -> Question:
+    """Parse a predict_state on a trace (`trace_id`, `version`) or a steps `view`."""
     options = _options(checker, obj, path)
+    on_view = "view" in obj
+    if on_view in {"trace_id" in obj, "version" in obj}:
+        checker.report(
+            path, "needs either 'trace_id' with 'version', or 'view', but not both"
+        )
+    if on_view:
+        from grokcheck.views import needs_v3  # noqa: PLC0415
+
+        needs_v3(checker, _at(path, "view"), "predict_state on a view")
     return PredictState(
         **dataclasses.asdict(stem),
         code=_optional_code(checker, obj, path),
-        trace_id=checker.identifier(obj, "trace_id", path),
-        version=checker.integer(obj.get("version"), _at(path, "version")) or 0,
+        trace_id=checker.identifier(obj, "trace_id", path) or None,
+        version=checker.integer(obj.get("version"), _at(path, "version")) or 0
+        if "version" in obj
+        else None,
+        view=checker.identifier(obj, "view", path) or None,
         step=checker.integer(obj.get("step"), _at(path, "step")) or 0,
         options=options,
         correct=_option_index(
@@ -2703,7 +3071,7 @@ def _assumptions(
             item,
             where,
             frozenset({"claim", "backing"}),
-            frozenset({"checked_by_spike", "verified"}),
+            frozenset({"checked_by_spike", "verified", "verified_hash"}),
         )
         verified = _verdict(checker, fields, where, "assumption")
         spike_id = checker.identifier(fields, "checked_by_spike", where) or None
@@ -3042,6 +3410,30 @@ def _one_of(
     return value
 
 
+def _view(
+    checker: _Checker, obj: dict[str, object], path: str, stem: _ElementStem
+) -> Element:
+    from grokcheck.views import parse_view  # noqa: PLC0415
+
+    return parse_view(checker, obj, path, stem)
+
+
+def _select_items(
+    checker: _Checker, obj: dict[str, object], path: str, stem: _Stem
+) -> Question:
+    from grokcheck.views import parse_select_items  # noqa: PLC0415
+
+    return parse_select_items(checker, obj, path, stem)
+
+
+def _fill_table(
+    checker: _Checker, obj: dict[str, object], path: str, stem: _Stem
+) -> Question:
+    from grokcheck.views import parse_fill_table  # noqa: PLC0415
+
+    return parse_fill_table(checker, obj, path, stem)
+
+
 def _registry(
     *formats: _Format[_StemT, _ParsedT],
 ) -> dict[str, _Format[_StemT, _ParsedT]]:
@@ -3095,6 +3487,12 @@ _ELEMENTS: dict[str, _Format[_ElementStem, Element]] = _registry(
         frozenset(),
         _video,
     ),
+    _Format(
+        ViewElement,
+        frozenset({"id", "layout", "caption"}),
+        _VIEW_OPTIONAL,
+        _view,
+    ),
 )
 
 _FORMATS: dict[str, _Format[_Stem, Question]] = _registry(
@@ -3129,8 +3527,8 @@ _FORMATS: dict[str, _Format[_Stem, Question]] = _registry(
     ),
     _Format(
         PredictState,
-        frozenset({"trace_id", "version", "step", "options", "correct"}),
-        frozenset({"code"}),
+        frozenset({"step", "options", "correct"}),
+        frozenset({"code", "trace_id", "version", "view"}),
         _predict_state,
     ),
     _Format(
@@ -3152,6 +3550,8 @@ _FORMATS: dict[str, _Format[_Stem, Question]] = _registry(
         _change_impact,
     ),
     _Format(Parsons, frozenset({"lines", "distractors"}), frozenset(), _parsons),
+    _Format(SelectItems, frozenset({"view", "answer"}), frozenset(), _select_items),
+    _Format(FillTable, frozenset({"view"}), frozenset(), _fill_table),
 )
 
 QUESTION_CLASSES: dict[str, type[Question]] = {

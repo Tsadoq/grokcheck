@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from grokcheck import git
+from grokcheck import data, git
 from grokcheck.lesson import format_claim_id
 from grokcheck.schedule import Entry, stale
 from grokcheck.sources import manifest_entries
@@ -36,12 +36,15 @@ class Report:
     """What to re-author: claim paths, spikes, and scope files changed since `since`.
 
     `since` is `None` outside git, and then no claim or file counts as moved.
+    `stale_data` maps each declared dataset to re-record to its changed files,
+    or to the reason it no longer loads.
     """
 
     since: str | None
     stale_claims: list[str]
     changed_spikes: list[ChangedSpike]
     moved_files: list[str]
+    stale_data: dict[str, list[str]] = field(default_factory=dict)
 
 
 def report(lesson_path: Path, project_root: Path) -> Report:
@@ -79,7 +82,26 @@ def report(lesson_path: Path, project_root: Path) -> Report:
         if since and files
         else None
     )
-    return Report(since, stale_claims, changed_spikes, git.lines(moved))
+    return Report(
+        since,
+        stale_claims,
+        changed_spikes,
+        git.lines(moved),
+        _stale_data(raw, project_root),
+    )
+
+
+def _stale_data(raw: dict[str, Any], project_root: Path) -> dict[str, list[str]]:
+    found: dict[str, list[str]] = {}
+    for use in raw.get("datasets", []):
+        dataset_id = str(use.get("id", ""))
+        try:
+            changed = data.stale(project_root, data.load(project_root, dataset_id))
+        except data.DataError as error:
+            changed = [str(error)]
+        if changed:
+            found[dataset_id] = changed
+    return found
 
 
 def _lesson_commit(lesson_path: Path, project_root: Path) -> str | None:

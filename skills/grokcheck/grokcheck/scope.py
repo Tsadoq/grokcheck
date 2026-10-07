@@ -6,13 +6,15 @@ it; every guess carries a `reason` saying which rule picked it.
 
 from __future__ import annotations
 
+import dataclasses
 import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from grokcheck import git
+from grokcheck.lesson import SUBJECTS
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -21,6 +23,7 @@ if TYPE_CHECKING:
     from grokcheck.lesson import Subject
 
 _REVISION = re.compile(r"^[0-9a-f]{7,40}(\.\.\.?[0-9a-f]{7,40})?$|^HEAD(?:$|[~^]|\.\.)")
+_SHA = re.compile(r"[0-9a-f]{7,40}")
 _DECISION = re.compile(
     r"\badrs?\b|/decisions?/|/pull/\d+|/merge_requests/\d+|/\+/\d+", re.IGNORECASE
 )
@@ -48,8 +51,24 @@ class ScopeGuess:
     sources: tuple[str, ...] = ()
 
 
-def infer(args: Sequence[str], project_root: Path) -> ScopeGuess:  # noqa: PLR0911
-    """Guess the subject of `args`, the user's words split as the shell split them."""
+def infer(args: Sequence[str], project_root: Path) -> ScopeGuess:
+    """Guess the subject of `args`, the user's words split as the shell split them.
+
+    A leading subject word, as in `decision <range>`, sets the subject and the
+    rest of the words are guessed as usual.
+    """
+    words = " ".join(args).split()
+    if len(words) > 1 and words[0].lower() in SUBJECTS:
+        rest = _infer(words[1:], project_root)
+        return dataclasses.replace(
+            rest,
+            subject=cast("Subject", words[0].lower()),
+            reason=f"the first word names the subject; {rest.reason}",
+        )
+    return _infer(args, project_root)
+
+
+def _infer(args: Sequence[str], project_root: Path) -> ScopeGuess:  # noqa: PLR0911
     commit = git.output(project_root, "rev-parse", "HEAD")
     commit = commit.strip() if commit else None
     text = " ".join(args)
@@ -64,21 +83,10 @@ def infer(args: Sequence[str], project_root: Path) -> ScopeGuess:  # noqa: PLR09
 
     if not args or text.lower() == "last change":
         return guess("change", *_last_change(project_root))
-    if _REVISION.match(args[0]):
-        listed = (
-            git.output(project_root, "diff", "--name-only", args[0])
-            if ".." in args[0]
-            else git.output(
-                project_root,
-                "diff-tree",
-                "--root",
-                "-r",
-                "--name-only",
-                "--no-commit-id",
-                args[0],
-            )
-        )
-        return guess("change", f"'{args[0]}' is a git revision", git.lines(listed))
+    revision = _revision(text.split(), project_root)
+    if revision is not None:
+        files = git.lines(_revision_files(revision, project_root))
+        return guess("change", f"'{revision}' is a git revision", files)
     documents = _documents(args, project_root)
     if documents:
         reason = "every argument is a document or a URL"
@@ -98,6 +106,43 @@ def infer(args: Sequence[str], project_root: Path) -> ScopeGuess:  # noqa: PLR09
     if _DECISION.search(text):
         return guess("decision", "the text names a merged change or decision record")
     return guess("concept", "no rule matched, so the text is taken as a concept")
+
+
+def _revision(words: Sequence[str], project_root: Path) -> str | None:
+    """Return the first word that is a revision: by shape when it leads, else by git."""
+    for k, word in enumerate(words):
+        if (k == 0 and _REVISION.match(word)) or _resolves(word, project_root):
+            return word
+    return None
+
+
+def _resolves(word: str, project_root: Path) -> bool:
+    """Say whether `word` is a commit range, or a commit hash, that git resolves."""
+    head, dots, tail = word.partition("..")
+    tail = tail.removeprefix(".")
+    sides = [head, tail] if dots else [word]
+    if not all(sides) or ".." in tail or (not dots and not _SHA.fullmatch(word)):
+        return False
+    return all(
+        git.output(
+            project_root, "rev-parse", "--verify", "--quiet", f"{side}^{{commit}}"
+        )
+        for side in sides
+    )
+
+
+def _revision_files(revision: str, project_root: Path) -> str | None:
+    if ".." in revision:
+        return git.output(project_root, "diff", "--name-only", revision)
+    return git.output(
+        project_root,
+        "diff-tree",
+        "--root",
+        "-r",
+        "--name-only",
+        "--no-commit-id",
+        revision,
+    )
 
 
 def pins(project_root: Path, names: Iterable[str]) -> dict[str, str | None]:

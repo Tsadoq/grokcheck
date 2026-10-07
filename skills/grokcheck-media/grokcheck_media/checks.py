@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Any
 from grokcheck.ground import manifest_entry
 from grokcheck.lesson import BACKING_CLASSES, Claim
 
+from grokcheck_media import tts
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
@@ -91,7 +93,9 @@ def diff(script: Sequence[str], heard: Sequence[str]) -> list[Difference]:
     """Compare each script sentence with its transcript, ignoring spelling noise.
 
     Case, punctuation, US against UK spelling and digits against spoken numbers
-    are not differences. A sentence missing from `heard` is heard as "".
+    are not differences, and neither is a word `tts.spoken` respells
+    ("JSON" against "jason", "409 conflict" against "four oh nine conflict").
+    A sentence missing from `heard` is heard as "".
     """
     differences = []
     for index, expected in enumerate(script):
@@ -124,9 +128,41 @@ def contact_sheet(video: Path, seconds: float, out: Path) -> Path:
     frames = max(1, math.ceil(seconds / _SHEET_SECONDS))
     rows = math.ceil(frames / _SHEET_COLUMNS)
     tile = f"fps=1/{_SHEET_SECONDS},scale=320:-1,tile={_SHEET_COLUMNS}x{rows}"
+    tile += ":padding=4:color=0xd1d9e0"
     options = ["-vf", tile, "-frames:v", "1", "-update", "1"]
     _run(["ffmpeg", "-y", "-i", str(video), *options, str(out)])
     return out
+
+
+def frames(
+    video: Path, out_dir: Path, *, at: Sequence[float] = (), every: float | None = None
+) -> list[dict[str, Any]]:
+    """Write full-size PNG frames of `video` at each of `at`, or every `every` seconds.
+
+    Returns `{at, path}` per frame written.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if every is not None:
+        for stale in out_dir.glob(f"{video.stem}-every-*.png"):
+            stale.unlink()
+        pattern = out_dir / f"{video.stem}-every-%03d.png"
+        _run(["ffmpeg", "-y", "-i", str(video), "-vf", f"fps=1/{every}", str(pattern)])
+        written = sorted(out_dir.glob(f"{video.stem}-every-*.png"))
+        return [
+            {"at": round(number * every, 3), "path": str(path)}
+            for number, path in enumerate(written)
+        ]
+    shots = []
+    for seconds in at:
+        out = out_dir / f"{video.stem}-{seconds:07.2f}s.png"
+        out.unlink(missing_ok=True)
+        command = ["ffmpeg", "-y", "-ss", f"{seconds:.3f}", "-i", str(video)]
+        _run([*command, "-frames:v", "1", "-update", "1", str(out)])
+        if not out.is_file():
+            msg = f"{video} has no frame at {seconds} seconds"
+            raise ValueError(msg)
+        shots.append({"at": seconds, "path": str(out)})
+    return shots
 
 
 def claim_manifest(script: dict[str, Any], project_root: Path) -> list[dict[str, Any]]:
@@ -150,7 +186,9 @@ def _claim(raw: dict[str, Any]) -> Claim:
 
 
 def _words(sentence: str) -> list[str]:
-    text = _NUMBER.sub(lambda match: f" {_spoken(match.group())} ", sentence.lower())
+    text = _NUMBER.sub(
+        lambda match: f" {_spoken(match.group())} ", tts.spoken(sentence).lower()
+    )
     words = re.sub(r"[^a-z0-9' ]", " ", text.replace("-", " ")).replace("'", "")
     return [_uk(word) for word in words.split()]
 

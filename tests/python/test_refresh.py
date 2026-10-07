@@ -99,3 +99,19 @@ def test_refresh_names_claims_whose_lines_or_spike_output_changed(
         pytest.fail(f"changed spikes are {result.changed_spikes}")
     if result.moved_files != ["mod.py"]:
         pytest.fail(f"moved files are {result.moved_files}")
+
+
+def test_refresh_names_datasets_to_record_again(tmp_path: Path) -> None:
+    """A dataset whose cited file changed is listed with that file."""
+    fixtures = Path(__file__).parents[1] / "fixtures"
+    project = tmp_path / "project"
+    shutil.copytree(fixtures / "project", project)
+    lesson_file = project / "lesson.json"
+    shutil.copy(fixtures / "lessons" / "valid_views.json", lesson_file)
+    stream = project / "src" / "stream.py"
+    stream.write_text(stream.read_text("utf-8") + "\n", encoding="utf-8")
+
+    stale = report(lesson_file, project).stale_data
+
+    if stale != {"reconnect": ["src/stream.py"], "terms": ["src/stream.py"]}:
+        pytest.fail(f"stale datasets are {stale}")

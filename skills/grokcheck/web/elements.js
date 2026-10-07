@@ -1,10 +1,11 @@
-import { askLine, commitOptions, sendAnswer } from "./api.js";
+import { askLine, commitOptions, mediaUrl, sendAnswer } from "./api.js";
 import { renderDiagram } from "./diagram.js";
 import { renderDiff } from "./diffview.js";
 import { renderMarkdown } from "./markdown.js";
 import { createPlayground } from "./playground.js";
 import { REVEAL_EVENT, codeView, element } from "./questions.js";
 import { createStepper } from "./stepper.js";
+import { createView } from "./view.js";
 
 export const ELEMENT_RENDERERS = {
   prose: (item) => element("div", { class: "prose", html: renderMarkdown(item.markdown) }),
@@ -28,9 +29,14 @@ export const ELEMENT_RENDERERS = {
   assumptions: renderAssumptions,
   diagram: renderDiagram,
   video: renderVideo,
+  view: createView,
 };
 
-export const GATING_ELEMENTS = new Set(["vocab", "playground"]);
+const GATING_ELEMENTS = new Set(["vocab", "playground"]);
+
+export function gatesSection(item) {
+  return item.depth !== "detail" && (item.type === "view" ? (item.tasks ?? []).length > 0 : GATING_ELEMENTS.has(item.type));
+}
 
 export function renderElements(section, context = {}) {
   const fragment = document.createDocumentFragment();
@@ -106,8 +112,11 @@ function renderVocab(item, context) {
     : "";
   return element("div", { class: "vocab-element" }, [
     legend,
-    element("div", { class: translated ? "terms translated" : "terms" }, rows),
-    element("div", { class: "vocab-side" }, code ? [code, detail] : [detail]),
+    element("div", { class: "panel" }, [
+      element("span", { class: "eyebrow", text: code ? "Vocabulary · click a term to find it in the code" : "Vocabulary · click a term" }),
+      element("div", { class: translated ? "terms translated" : "terms" }, rows),
+    ]),
+    element("div", { class: "vocab-side panel" }, code ? [code, detail] : [detail]),
   ]);
 }
 
@@ -258,13 +267,14 @@ function renderAssumptions(item, context) {
 }
 
 function renderVideo(item) {
-  const token = new URLSearchParams(globalThis.location?.hash.slice(1)).get("t") ?? "";
-  const media = (file) =>
-    `/api/media?element=${encodeURIComponent(item.id)}&file=${file}&t=${encodeURIComponent(token)}`;
+  const video = mediaUrl(item.id, "video");
+  const captions = mediaUrl(item.id, "captions");
   return element("figure", { class: "video-element" }, [
-    element("video", { controls: true, preload: "metadata", style: "max-width: 100%", src: media("video") }, [
-      element("track", { kind: "captions", srclang: "en", label: "Captions", src: media("captions"), default: true }),
-    ]),
+    video
+      ? element("video", { controls: true, preload: "metadata", style: "max-width: 100%", src: video }, [
+          captions ? element("track", { kind: "captions", srclang: "en", label: "Captions", src: captions, default: true }) : "",
+        ])
+      : element("p", { class: "note", text: "This video was left out of the export to keep the file small. Its transcript follows." }),
     element("details", {}, [
       element("summary", { text: "Transcript" }),
       element("p", { text: item.transcript }),
